@@ -2,6 +2,12 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+*.egg
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+*.log
 .venv/
 venv/
 .env
@@ -14,3 +20,7 @@ models/
 .DS_Store
 .idea/
 .vscode/
+
+# Jupyter
+*.ipynb_checkpoints/
+*.ipynb

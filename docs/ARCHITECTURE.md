@@ -30,7 +30,7 @@ tradeoffs:
 
 **This project predicts: 5-day forward return (regression)**
 
-```
+```python
 target = (price[today + 5 trading days] - price[today]) / price[today]
 ```
 
@@ -173,13 +173,15 @@ new data. Controlled by:
 
 ### Hyperparameters used
 
+Reasonable starting points (and search ranges for Optuna):
+
 ```python
 lgb.LGBMRegressor(
-    n_estimators=300,       # max number of trees
-    max_depth=5,            # max depth per tree
-    num_leaves=15,          # max leaves per tree
-    learning_rate=0.03,     # step size — smaller = more conservative
-    min_child_samples=30,   # minimum samples required to form a leaf
+    n_estimators=300,       # max number of trees (search: 100-1000)
+    max_depth=5,            # max depth per tree (search: 3-8)
+    num_leaves=15,          # max leaves per tree (search: 10-50)
+    learning_rate=0.03,     # step size (search: 0.01-0.1)
+    min_child_samples=30,   # minimum samples to form a leaf (search: 20-100)
 )
 ```
 
@@ -196,10 +198,23 @@ scores look great; real-world performance is terrible.
 
 Instead, walk-forward validation:
 
-```
-Train: Jan 2020 → Dec 2023   |   Test: Jan 2024 → Jun 2024
-Train: Jan 2020 → Jun 2024   |   Test: Jul 2024 → Dec 2024
-Train: Jan 2020 → Dec 2024   |   Test: Jan 2025 → present
+```mermaid
+gantt
+    title Walk-Forward Validation Splits
+    dateFormat YYYY-MM
+    axisFormat %Y
+    
+    section Fold 1
+    Train (Jan 20-Dec 23) :active, 2020-01, 2023-12
+    Test (Jan 24-Jun 24)  :crit, 2024-01, 2024-06
+
+    section Fold 2
+    Train (Jan 20-Jun 24) :active, 2020-01, 2024-06
+    Test (Jul 24-Dec 24)  :crit, 2024-07, 2024-12
+
+    section Fold 3
+    Train (Jan 20-Dec 24) :active, 2020-01, 2024-12
+    Test (Jan 25-Jul 25)  :crit, 2025-01, 2025-07
 ```
 
 Each validation window is always *after* the training window, mimicking how the model
@@ -217,6 +232,10 @@ After the baseline works, it's worth comparing:
 
 Whichever generalizes better on the walk-forward validation tells you something real
 about how transferable the patterns are between two companies.
+
+### Reproducibility
+
+To ensure your validation results are reproducible across runs, always set random seeds (e.g., `random_state=42` in LightGBM, `np.random.seed(42)`).
 
 ---
 
@@ -244,26 +263,27 @@ a meaningful result, not a failure.
 
 Once the base pipeline works, natural next steps (roughly in order of impact):
 
-**Hyperparameter tuning with Optuna**
+**Hyperparameter tuning with Optuna** *(Effort: ~2 hours)*
 The current hyperparameters are reasonable defaults, not optimized. Use
 [Optuna](https://optuna.org) to search over `max_depth`, `num_leaves`,
 `learning_rate`, `min_child_samples`, and `n_estimators` with walk-forward
 cross-validation as the objective. This is the single highest-leverage
 improvement before adding new features or models.
 
-**Add more companies**
+**Add more companies** *(Effort: ~15 mins)*
 Edit `TICKER_MAP` in `nl_agent.py`, add tickers to the list in `fetch_data.py`,
 re-run from Step 1. More tickers give the pooled model a richer training set.
 
-**Add sector-relative features**
+**Add sector-relative features** *(Effort: ~1 hour)*
 Pull Nifty 50 (`^NSEI`) or sector indices via yfinance and compute each stock's
 return relative to its index — often improves signal quality.
 
-**Add a Streamlit UI**
+**Add a Streamlit UI** *(Effort: ~1-2 hours)*
 If you want a browser-based interface instead of terminal chat, `streamlit` can wrap
 `predict.py` into a simple web app with a dropdown and chart in under 100 lines.
 
-**Experiment with LSTM**
+**Experiment with LSTM** *(Effort: ~1-2 days)*
 Once you trust the LightGBM baseline, train a small LSTM (PyTorch, MPS backend on M-series Mac)
 on the raw return sequences and compare directional accuracy. On small datasets like this,
 LightGBM usually wins — but it's a useful experiment.
+

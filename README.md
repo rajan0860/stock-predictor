@@ -25,10 +25,13 @@ git clone https://github.com/rajan0860/stock-predictor.git
 cd stock-predictor
 
 python -m venv .venv
-source .venv/bin/activate          # macOS / Linux
-# .venv\Scripts\activate           # Windows
+# macOS / Linux
+source .venv/bin/activate
+# Windows
+# .venv\Scripts\activate
 
 pip install -r requirements.txt
+ollama serve &                     # ensure Ollama is running in the background
 ollama pull llama3.1:8b            # one-time; requires Ollama installed
 
 # Run the pipeline (once src/ scripts land)
@@ -55,6 +58,8 @@ Training completes in a few minutes on a standard laptop.
 - [Limitations](#limitations)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
 - [License](#license)
 
 ---
@@ -226,7 +231,9 @@ point among many, not a trading signal.
 
 ## Results
 
-Example walk-forward validation results (pooled model, illustrative — your numbers will vary):
+> ⚠️ **Note:** The numbers below are illustrative projections to show the expected format and rough baseline, not actual training results. Your numbers will vary.
+
+Example walk-forward validation results (pooled model):
 
 | Fold | Train period | Test period | MAE | Directional Accuracy | Naive Baseline Acc |
 |---|---|---|---|---|---|
@@ -244,10 +251,15 @@ consistently lands below ~51%, the model has not found useful signal.
 
 ## Roadmap
 
+**Phase 1: Data & Features**
 - [ ] `fetch_data.py` — pull and cache NSE price + fundamentals via yfinance
 - [ ] `features.py` — technical indicators + fundamental ratios
+
+**Phase 2: Modeling**
 - [ ] `dataset.py` + `train.py` — walk-forward splits, LightGBM training
 - [ ] `predict.py` — single-ticker inference with live data fetch
+
+**Phase 3: LLM Integration**
 - [ ] `nl_agent.py` — Ollama tool-calling agent
 
 ---
@@ -282,6 +294,24 @@ and extension ideas.
 | Doc | Contents |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Problem framing, data sources, feature engineering, LightGBM rationale, walk-forward validation, evaluation metrics, extension ideas |
+
+---
+
+## Contributing
+
+Contributions are welcome! Since this is an actively evolving project, please check the [Roadmap](#roadmap) to see what's currently in progress. 
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, suggest features, and submit pull requests.
+
+---
+
+## Acknowledgments
+
+This project relies on several excellent open-source tools:
+- **[yfinance](https://github.com/ranaroussi/yfinance)** for fetching market data
+- **[LightGBM](https://github.com/microsoft/LightGBM)** for the gradient boosting framework
+- **[pandas-ta](https://github.com/twopirllc/pandas-ta)** for technical indicators
+- **[Ollama](https://github.com/ollama/ollama)** and **[LangChain](https://github.com/langchain-ai/langchain)** for local LLM orchestration
 
 ---
 
