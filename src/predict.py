@@ -18,10 +18,10 @@ def predict(ticker, force_refresh=True):
     if force_refresh:
         # Re-run fetch and features for this specific ticker to get live data
         try:
-            from fetch_data import TICKERS as FETCH_TICKERS
-            from features import TICKERS as FEAT_TICKERS
-            import fetch_data
-            import features
+            from src.fetch_data import TICKERS as FETCH_TICKERS
+            from src.features import TICKERS as FEAT_TICKERS
+            import src.fetch_data as fetch_data
+            import src.features as features
             
             # Temporarily override TICKERS to just this one so it's fast
             original_fetch_tickers = FETCH_TICKERS.copy()
@@ -44,7 +44,7 @@ def predict(ticker, force_refresh=True):
         except Exception as e:
             print(f"Warning: Live refresh failed ({e}), using cached data.")
 
-    from dataset import load_data
+    from src.dataset import load_data
     df = load_data()
     ticker_df = df[df['ticker'] == ticker].copy()
     
