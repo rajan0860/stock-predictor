@@ -1,8 +1,6 @@
 import os
 import sys
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Assuming Ollama is running and model is loaded
@@ -57,10 +55,6 @@ def get_stock_prediction(company_name: str) -> str:
 
 app = FastAPI(title="Stock Predictor API")
 
-# Mount static files
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-os.makedirs(static_dir, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Initialize LLM Agent
 try:
@@ -85,7 +79,7 @@ class ChatResponse(BaseModel):
 
 @app.get("/")
 def read_root():
-    return FileResponse(os.path.join(static_dir, "index.html"))
+    return {"message": "Stock Predictor API is running."}
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
