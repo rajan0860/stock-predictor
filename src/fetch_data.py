@@ -2,7 +2,8 @@ import os
 import yfinance as yf
 import pandas as pd
 
-TICKERS = ["RELIANCE.NS", "TCS.NS"]
+from src.config import TICKERS
+
 DATA_DIR = "data"
 
 def fetch_data():

@@ -5,14 +5,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
 from predict import predict
 
-# Map common names to tickers
-TICKER_MAP = {
-    "reliance": "RELIANCE.NS",
-    "reliance industries": "RELIANCE.NS",
-    "tcs": "TCS.NS",
-    "tata consultancy": "TCS.NS",
-    "tata consultancy services": "TCS.NS"
-}
+from src.config import TICKER_MAP, SUPPORTED_STOCKS
 
 @tool
 def get_stock_prediction(company_name: str) -> str:
@@ -32,7 +25,8 @@ def get_stock_prediction(company_name: str) -> str:
                 break
                 
     if not ticker:
-        return f"Sorry, I don't know the ticker for '{company_name}'. I only track Reliance and TCS right now."
+        supported_names = ", ".join([info["name"] for info in SUPPORTED_STOCKS.values()])
+        return f"Sorry, I don't know the ticker for '{company_name}'. I currently track: {supported_names}."
         
     print(f"\n[Tool calling predict.py for {ticker} - fetching live data...]")
     result = predict(ticker, force_refresh=True)
@@ -66,7 +60,8 @@ def run_agent():
     
     print("\n" + "="*50)
     print("Stock Predictor Natural Language Agent")
-    print("Ask about RELIANCE or TCS predictions in plain English.")
+    supported_names_short = ", ".join([ticker.split('.')[0] for ticker in SUPPORTED_STOCKS.keys()])
+    print(f"Ask about {supported_names_short} predictions in plain English.")
     print("Type 'quit' or 'exit' to stop.")
     print("="*50 + "\n")
     

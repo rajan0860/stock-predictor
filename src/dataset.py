@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-TICKERS = ["RELIANCE.NS", "TCS.NS"]
+from src.config import TICKERS
 DATA_DIR = "data"
 
 def load_data():

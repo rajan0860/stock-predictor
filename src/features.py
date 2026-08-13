@@ -2,7 +2,8 @@ import os
 import pandas as pd
 import pandas_ta as ta
 
-TICKERS = ["RELIANCE.NS", "TCS.NS"]
+from src.config import TICKERS
+
 DATA_DIR = "data"
 
 def compute_features():

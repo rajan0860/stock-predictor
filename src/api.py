@@ -9,14 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.predict import predict
 
-# Map common names to tickers (same logic as nl_agent.py)
-TICKER_MAP = {
-    "reliance": "RELIANCE.NS",
-    "reliance industries": "RELIANCE.NS",
-    "tcs": "TCS.NS",
-    "tata consultancy": "TCS.NS",
-    "tata consultancy services": "TCS.NS"
-}
+from src.config import TICKER_MAP, SUPPORTED_STOCKS
 
 # Define the tool manually for the API to avoid circular imports
 from langchain_core.tools import tool
@@ -38,7 +31,8 @@ def get_stock_prediction(company_name: str) -> str:
                 break
                 
     if not ticker:
-        return f"Sorry, I don't know the ticker for '{company_name}'. I only track Reliance and TCS right now."
+        supported_names = ", ".join([info["name"] for info in SUPPORTED_STOCKS.values()])
+        return f"Sorry, I don't know the ticker for '{company_name}'. I currently track: {supported_names}."
         
     print(f"\n[API calling predict.py for {ticker}]")
     result = predict(ticker, force_refresh=True)

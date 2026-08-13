@@ -8,7 +8,6 @@ import os
 # Ensure src modules can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.predict import predict
-from src.api import TICKER_MAP
 
 # Configure the Streamlit page
 st.set_page_config(
@@ -56,21 +55,18 @@ st.markdown("""
 st.markdown("<h1>📈 Stock Predictor Dashboard</h1>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>Powered by LightGBM & yfinance</div>", unsafe_allow_html=True)
 
-# Create a mapping for UI display
-display_to_ticker = {
-    "Reliance Industries": "RELIANCE.NS",
-    "Tata Consultancy Services (TCS)": "TCS.NS"
-}
+# Import mapping for UI display
+from src.config import DISPLAY_TO_TICKER
 
 # User Input
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     selected_name = st.selectbox(
         "Select a Stock",
-        options=list(display_to_ticker.keys()),
+        options=list(DISPLAY_TO_TICKER.keys()),
         index=0
     )
-    ticker = display_to_ticker[selected_name]
+    ticker = DISPLAY_TO_TICKER[selected_name]
 
 st.markdown("<br>", unsafe_allow_html=True)
 
