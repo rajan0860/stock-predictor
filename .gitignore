@@ -14,7 +14,6 @@ venv/
 
 # Pipeline outputs (generated locally)
 data/
-models/
 
 # OS / editor
 .DS_Store
