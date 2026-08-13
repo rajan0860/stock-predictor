@@ -38,7 +38,8 @@ ollama pull llama3.1:8b            # one-time; requires Ollama installed
 python src/fetch_data.py
 python src/features.py
 python src/train.py
-python src/nl_agent.py
+python src/nl_agent.py             # Optional: terminal-based chat
+streamlit run app.py               # Start the web dashboard
 ```
 
 **System requirements:** Python 3.10+, 8 GB+ RAM (for `llama3.1:8b`), no GPU needed.
@@ -164,8 +165,12 @@ python src/train.py
 # Step 4 — test a prediction directly (optional sanity check)
 python src/predict.py RELIANCE.NS
 
-# Step 5 — start the natural language agent
+# Step 5 — start the natural language agent (optional)
 python src/nl_agent.py
+
+# Step 6 — start the Streamlit Web Dashboard
+streamlit run app.py
+# (Dashboard will open automatically at http://localhost:8501)
 ```
 
 ### Re-running later
