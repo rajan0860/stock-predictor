@@ -2,6 +2,8 @@ import os
 import yfinance as yf
 import pandas as pd
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import TICKERS
 
 DATA_DIR = "data"
