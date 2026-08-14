@@ -42,6 +42,13 @@ def get_stock_prediction(company_name: str) -> str:
         f"Remember, this is a model estimate, not financial advice."
     )
 
+SYSTEM_PROMPT = SystemMessage(content=(
+    "You are a stock market prediction assistant. Your only job is to provide stock predictions "
+    "using the `get_stock_prediction` tool. Never guess or hallucinate predictions. If the tool "
+    "gives you an answer, relay it naturally to the user. Always remind the user that this is a "
+    "model estimate, not financial advice."
+))
+
 def run_agent():
     print("Initializing Ollama Agent...")
     try:
@@ -51,13 +58,6 @@ def run_agent():
         print(f"Error initializing Ollama: {e}")
         print("Please ensure Ollama is running and the model is pulled (`ollama pull llama3.1:8b`).")
         return
-        
-    system_prompt = SystemMessage(content=(
-        "You are a stock market prediction assistant. Your only job is to provide stock predictions "
-        "using the `get_stock_prediction` tool. Never guess or hallucinate predictions. If the tool "
-        "gives you an answer, relay it naturally to the user. Always remind the user that this is a "
-        "model estimate, not financial advice."
-    ))
     
     print("\n" + "="*50)
     print("Stock Predictor Natural Language Agent")
@@ -76,7 +76,7 @@ def run_agent():
                 continue
                 
             messages = [
-                system_prompt,
+                SYSTEM_PROMPT,
                 HumanMessage(content=user_input)
             ]
             

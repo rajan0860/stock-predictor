@@ -14,6 +14,10 @@ SUPPORTED_STOCKS = {
     "INFY.NS": {
         "name": "Infosys",
         "aliases": ["infy", "infosys"]
+    },
+    "HINDPETRO.NS": {
+        "name": "Hindustan Petroleum",
+        "aliases": ["hpcl", "hindustan petroleum", "hindpetro"]
     }
 }
 

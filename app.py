@@ -9,6 +9,10 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.predict import predict
 
+from langchain_core.messages import HumanMessage
+from langchain_ollama import ChatOllama
+from src.nl_agent import get_stock_prediction, SYSTEM_PROMPT
+
 # Configure the Streamlit page
 st.set_page_config(
     page_title="Stock Predictor",
@@ -58,84 +62,143 @@ st.markdown("<div class='subtitle'>Powered by LightGBM & yfinance</div>", unsafe
 # Import mapping for UI display
 from src.config import DISPLAY_TO_TICKER
 
-# User Input
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    selected_name = st.selectbox(
-        "Select a Stock",
-        options=list(DISPLAY_TO_TICKER.keys()),
-        index=0
-    )
-    ticker = DISPLAY_TO_TICKER[selected_name]
+tab1, tab2 = st.tabs(["Dashboard", "AI Assistant"])
 
-st.markdown("<br>", unsafe_allow_html=True)
+with tab1:
+    # User Input
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        selected_name = st.selectbox(
+            "Select a Stock",
+            options=list(DISPLAY_TO_TICKER.keys()),
+            index=0
+        )
+        ticker = DISPLAY_TO_TICKER[selected_name]
 
-# Main prediction logic
-if st.button("Predict 5-Day Return", use_container_width=True):
-    with st.spinner(f"Fetching live data and running model for {ticker}..."):
-        # Wrap predict in try/except in case of issues
-        try:
-            result = predict(ticker, force_refresh=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Main prediction logic
+    if st.button("Predict 5-Day Return", use_container_width=True):
+        with st.spinner(f"Fetching live data and running model for {ticker}..."):
+            # Wrap predict in try/except in case of issues
+            try:
+                result = predict(ticker, force_refresh=True)
+                
+                if result:
+                    st.success(f"Prediction generated successfully for {ticker}!")
+                    
+                    # Metrics Display
+                    st.markdown("### Model Forecast")
+                    m1, m2, m3 = st.columns(3)
+                    
+                    # Format metrics
+                    latest_price = result['latest_price']
+                    implied_price = result['implied_price']
+                    pred_return = result['pred_return']
+                    
+                    delta_price = implied_price - latest_price
+                    delta_price_str = f"-₹{abs(delta_price):,.2f}" if delta_price < 0 else f"₹{delta_price:,.2f}"
+                    
+                    m1.metric(
+                        label="Latest Close", 
+                        value=f"₹{latest_price:,.2f}"
+                    )
+                    m2.metric(
+                        label="Predicted Return", 
+                        value=f"{pred_return*100:+.2f}%",
+                        delta=f"{pred_return*100:.2f}%",
+                        delta_color="normal"
+                    )
+                    m3.metric(
+                        label="Implied 5-Day Target", 
+                        value=f"₹{implied_price:,.2f}",
+                        delta=delta_price_str,
+                        delta_color="normal"
+                    )
+                    
+                    st.info("📅 **As of:** " + result['date'])
+                    
+                    st.markdown("---")
+                    
+                    # Historical Chart
+                    st.markdown("### Recent Price History (30 Days)")
+                    try:
+                        end_date = datetime.datetime.now()
+                        start_date = end_date - datetime.timedelta(days=45) # 45 calendar days ~ 30 trading days
+                        hist_data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                        
+                        if not hist_data.empty:
+                            # Streamlit line chart requires a flat index and specific columns
+                            chart_data = pd.DataFrame(hist_data['Close'])
+                            # Handle multi-level columns if yfinance returns them
+                            if isinstance(chart_data.columns, pd.MultiIndex):
+                                chart_data.columns = [col[0] for col in chart_data.columns]
+                                
+                            st.line_chart(chart_data, use_container_width=True)
+                        else:
+                            st.warning("Could not fetch historical data for chart.")
+                    except Exception as e:
+                        st.warning(f"Could not load chart: {e}")
+                        
+                    # Disclaimer
+                    st.caption("⚠️ **Disclaimer:** This is a machine learning model estimate, not financial advice. Do not trade based solely on these predictions.")
+                    
+                else:
+                    st.error("Model returned None. Have you trained the model by running `python src/train.py`?")
+                    
+            except Exception as e:
+                st.error(f"An error occurred during prediction: {e}")
+
+with tab2:
+    st.markdown("### 💬 AI Agent Assistant")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        
+    for msg in st.session_state.messages:
+        if isinstance(msg, HumanMessage):
+            st.chat_message("user").write(msg.content)
+        elif isinstance(msg, dict) and msg.get("role") == "tool":
+            pass # Skip showing raw tool outputs
+        elif hasattr(msg, "content") and msg.content:
+            st.chat_message("assistant").write(msg.content)
             
-            if result:
-                st.success(f"Prediction generated successfully for {ticker}!")
-                
-                # Metrics Display
-                st.markdown("### Model Forecast")
-                m1, m2, m3 = st.columns(3)
-                
-                # Format metrics
-                latest_price = result['latest_price']
-                implied_price = result['implied_price']
-                pred_return = result['pred_return']
-                
-                m1.metric(
-                    label="Latest Close", 
-                    value=f"₹{latest_price:,.2f}"
-                )
-                m2.metric(
-                    label="Predicted Return", 
-                    value=f"{pred_return*100:+.2f}%",
-                    delta=f"{pred_return*100:+.2f}%",
-                    delta_color="normal"
-                )
-                m3.metric(
-                    label="Implied 5-Day Target", 
-                    value=f"₹{implied_price:,.2f}",
-                    delta=f"₹{implied_price - latest_price:+,.2f}",
-                    delta_color="normal"
-                )
-                
-                st.info("📅 **As of:** " + result['date'])
-                
-                st.markdown("---")
-                
-                # Historical Chart
-                st.markdown("### Recent Price History (30 Days)")
+    if prompt := st.chat_input("Ask about stock predictions... (e.g. 'How does TCS look this week?')"):
+        st.chat_message("user").write(prompt)
+        
+        st.session_state.messages.append(HumanMessage(content=prompt))
+        messages = [SYSTEM_PROMPT] + st.session_state.messages
+        
+        with st.chat_message("assistant"):
+            with st.spinner("AI is thinking..."):
                 try:
-                    end_date = datetime.datetime.now()
-                    start_date = end_date - datetime.timedelta(days=45) # 45 calendar days ~ 30 trading days
-                    hist_data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                    llm = ChatOllama(model="llama3.1:8b")
+                    llm_with_tools = llm.bind_tools([get_stock_prediction])
                     
-                    if not hist_data.empty:
-                        # Streamlit line chart requires a flat index and specific columns
-                        chart_data = pd.DataFrame(hist_data['Close'])
-                        # Handle multi-level columns if yfinance returns them
-                        if isinstance(chart_data.columns, pd.MultiIndex):
-                            chart_data.columns = [col[0] for col in chart_data.columns]
-                            
-                        st.line_chart(chart_data, use_container_width=True)
+                    ai_msg = llm_with_tools.invoke(messages)
+                    
+                    if hasattr(ai_msg, 'tool_calls') and ai_msg.tool_calls:
+                        messages.append(ai_msg)
+                        st.session_state.messages.append(ai_msg)
+                        
+                        for tool_call in ai_msg.tool_calls:
+                            if tool_call['name'] == 'get_stock_prediction':
+                                tool_result = get_stock_prediction.invoke(tool_call['args'])
+                                tool_message = {
+                                    "role": "tool",
+                                    "name": tool_call['name'],
+                                    "content": tool_result,
+                                    "tool_call_id": tool_call['id']
+                                }
+                                messages.append(tool_message)
+                                st.session_state.messages.append(tool_message)
+                        
+                        final_response = llm_with_tools.invoke(messages)
+                        st.write(final_response.content)
+                        st.session_state.messages.append(final_response)
                     else:
-                        st.warning("Could not fetch historical data for chart.")
+                        st.write(ai_msg.content)
+                        st.session_state.messages.append(ai_msg)
+                        
                 except Exception as e:
-                    st.warning(f"Could not load chart: {e}")
-                    
-                # Disclaimer
-                st.caption("⚠️ **Disclaimer:** This is a machine learning model estimate, not financial advice. Do not trade based solely on these predictions.")
-                
-            else:
-                st.error("Model returned None. Have you trained the model by running `python src/train.py`?")
-                
-        except Exception as e:
-            st.error(f"An error occurred during prediction: {e}")
-
+                    st.error(f"Error communicating with AI: {e}")
