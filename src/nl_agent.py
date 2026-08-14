@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from langchain_ollama import ChatOllama
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
-from predict import predict
+from src.predict import predict
 
 from src.config import TICKER_MAP, SUPPORTED_STOCKS
 
