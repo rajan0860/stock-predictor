@@ -95,3 +95,25 @@ if __name__ == "__main__":
         
     ticker = sys.argv[1]
     predict(ticker)
+
+
+def batch_predict(tickers):
+    """Return a pandas Series of predictions for a list of tickers.
+
+    Args:
+        tickers (Iterable[str]): Iterable of ticker symbols.
+    Returns:
+        pd.Series: Series indexed by ticker with predicted returns.
+    """
+    import pandas as pd
+    preds = []
+    idx = []
+    for t in tickers:
+        result = predict(t, force_refresh=False)
+        if result and isinstance(result, dict) and 'pred_return' in result:
+            preds.append(result['pred_return'])
+            idx.append(t)
+        else:
+            preds.append(float('nan'))
+            idx.append(t)
+    return pd.Series(preds, index=idx)
