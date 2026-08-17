@@ -18,43 +18,59 @@ def evaluate(split_count: int = 3, test_size_days: int = 252) -> MetricResult:
 
     Returns a MetricResult aggregating metrics across all splits (average).
     """
+    import lightgbm as lgb
+    
     df = load_data()
-    splits = get_walk_forward_splits(df, n_splits=split_count, test_size_days=test_size_days)
+    # Filter rows with target available
+    clean_df = df.dropna(subset=['target_5d']).copy()
+    clean_df['ticker'] = clean_df['ticker'].astype('category')
+    
+    exclude_cols = ['target_5d', 'Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits']
+    feature_cols = [c for c in clean_df.columns if c not in exclude_cols]
+    
+    splits = get_walk_forward_splits(clean_df, n_splits=split_count, test_size_days=test_size_days)
     if not splits:
         raise ValueError("No train/test splits generated. Check dataset size or parameters.")
+
+    params = {
+        'n_estimators': 300,
+        'max_depth': 5,
+        'num_leaves': 15,
+        'learning_rate': 0.03,
+        'min_child_samples': 30,
+        'random_state': 42,
+        'n_jobs': -1,
+        'verbose': -1
+    }
 
     # Containers for per‑split metrics
     mae_vals, rmse_vals, mape_vals, dir_vals, base_vals = [], [], [], [], []
 
     for train_mask, test_mask in splits:
-        train_df = df[train_mask]
-        test_df = df[test_mask]
-        # Target column expected to be 'ret_5d' (5‑day forward return)
-        y_true = test_df["ret_5d"]
-        # Predict using the model – reuse predict function for batch mode
-        from src.predict import batch_predict  # we will create a helper later; fallback to single predict loop
-        # If batch_predict is not available, fall back to simple loop
-        try:
-            y_pred = batch_predict(test_df.index.get_level_values(0).unique())
-        except Exception:
-            # Fallback: iterate ticker list
-            y_pred = []
-            for ts in test_df.index.get_level_values(0).unique():
-                pred = __import__("src.predict", fromlist=["predict"]).predict(ts, force_refresh=False)
-                y_pred.append(pred["pred_return"]) if pred else y_pred.append(float('nan'))
-            y_pred = pd.Series(y_pred, index=test_df.index.get_level_values(0).unique())
+        train_sub = clean_df[train_mask]
+        test_sub = clean_df[test_mask]
+        
+        X_train, y_train = train_sub[feature_cols], train_sub['target_5d']
+        X_test, y_test = test_sub[feature_cols], test_sub['target_5d']
+        
+        if len(X_train) == 0 or len(X_test) == 0:
+            continue
+            
+        model = lgb.LGBMRegressor(**params)
+        model.fit(X_train, y_train)
+        
+        preds = model.predict(X_test)
+        y_pred = pd.Series(preds, index=y_test.index)
 
-        # Align predictions with true values
-        y_pred = y_pred.reindex(y_true.index)
-        # Drop NaNs that may arise from missing predictions
-        mask = y_true.notna() & y_pred.notna()
-        y_true, y_pred = y_true[mask], y_pred[mask]
+        # Drop NaNs if any
+        mask = y_test.notna() & y_pred.notna()
+        y_t, y_p = y_test[mask], y_pred[mask]
 
-        mae_vals.append(mae(y_true, y_pred))
-        rmse_vals.append(rmse(y_true, y_pred))
-        mape_vals.append(mape(y_true, y_pred))
-        dir_vals.append(directional_accuracy(y_true, y_pred))
-        base_vals.append(baseline_directional_accuracy(y_true))
+        mae_vals.append(mae(y_t, y_p))
+        rmse_vals.append(rmse(y_t, y_p))
+        mape_vals.append(mape(y_t, y_p))
+        dir_vals.append(directional_accuracy(y_t, y_p))
+        base_vals.append(baseline_directional_accuracy(y_t))
 
     # Average across splits
     return MetricResult(
