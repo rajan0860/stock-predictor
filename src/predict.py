@@ -55,7 +55,8 @@ def predict(ticker, force_refresh=True):
         
     try:
         model_data = joblib.load(MODEL_PATH)
-        model = model_data['model']
+        model = model_data.get('regressor', model_data.get('model'))
+        classifier = model_data.get('classifier')
         feature_cols = model_data['feature_cols']
     except Exception as e:
         print(f"Error loading model: {e}")
@@ -75,18 +76,29 @@ def predict(ticker, force_refresh=True):
     latest_price = latest_row['Close'].values[0]
     implied_price = latest_price * (1 + pred_return)
     
+    prob_up = None
+    if classifier is not None:
+        try:
+            prob_up = float(classifier.predict_proba(X)[0, 1])
+        except Exception:
+            prob_up = None
+
     date_str = latest_date.strftime('%Y-%m-%d')
     print(f"\nAs of {date_str}, {ticker} closed at Rs.{latest_price:.2f}.")
     print(f"The model predicts a {pred_return*100:+.1f}% return over the next 5 trading days,")
-    print(f"implying a price around Rs.{implied_price:.2f}. This is a model estimate,")
-    print(f"not financial advice.\n")
+    print(f"implying a price around Rs.{implied_price:.2f}.")
+    if prob_up is not None:
+        direction_label = "BULLISH (UP)" if prob_up >= 0.5 else "BEARISH (DOWN)"
+        print(f"Directional Signal: {direction_label} (Confidence: {prob_up*100:.1f}%)")
+    print("This is a model estimate, not financial advice.\n")
     
     return {
         'date': date_str,
         'ticker': ticker,
         'latest_price': float(latest_price),
         'pred_return': float(pred_return),
-        'implied_price': float(implied_price)
+        'implied_price': float(implied_price),
+        'prob_up': prob_up
     }
 
 if __name__ == "__main__":

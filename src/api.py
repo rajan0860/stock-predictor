@@ -40,10 +40,16 @@ def get_stock_prediction(company_name: str) -> str:
     if not result:
         return f"Failed to generate prediction for {ticker}."
         
+    direction_str = ""
+    if result.get('prob_up') is not None:
+        p_up = result['prob_up']
+        sig = "BULLISH (UP)" if p_up >= 0.5 else "BEARISH (DOWN)"
+        direction_str = f" Directional Signal: {sig} ({p_up*100:.1f}% confidence)."
+        
     return (
         f"As of {result['date']}, {result['ticker']} closed at Rs.{result['latest_price']:.2f}. "
         f"The model predicts a {result['pred_return']*100:+.1f}% return over the next 5 trading days, "
-        f"implying a price around Rs.{result['implied_price']:.2f}. "
+        f"implying a price around Rs.{result['implied_price']:.2f}.{direction_str} "
         f"Remember, this is a model estimate, not financial advice."
     )
 

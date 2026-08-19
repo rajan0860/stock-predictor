@@ -8,7 +8,34 @@ from src.config import TICKERS
 
 DATA_DIR = "data"
 
+def load_benchmark_data():
+    """Load and process Nifty 50 and India VIX benchmarks."""
+    nifty_path = os.path.join(DATA_DIR, "nifty50_price.parquet")
+    vix_path = os.path.join(DATA_DIR, "vix_price.parquet")
+    
+    benchmarks = pd.DataFrame()
+    
+    if os.path.exists(nifty_path):
+        nifty = pd.read_parquet(nifty_path)
+        if nifty.index.tz is not None:
+            nifty.index = nifty.index.tz_localize(None)
+        benchmarks['nifty_close'] = nifty['Close']
+        benchmarks['nifty_ret_1d'] = nifty['Close'].pct_change(1)
+        benchmarks['nifty_ret_5d'] = nifty['Close'].pct_change(5)
+        benchmarks['nifty_vol_20d'] = benchmarks['nifty_ret_1d'].rolling(20).std()
+    
+    if os.path.exists(vix_path):
+        vix = pd.read_parquet(vix_path)
+        if vix.index.tz is not None:
+            vix.index = vix.index.tz_localize(None)
+        benchmarks['vix_close'] = vix['Close']
+        benchmarks['vix_ret_1d'] = vix['Close'].pct_change(1)
+        
+    return benchmarks
+
 def compute_features():
+    benchmarks = load_benchmark_data()
+    
     for ticker in TICKERS:
         ticker_safe = ticker.replace('.', '_')
         print(f"Computing features for {ticker}...")
@@ -26,16 +53,48 @@ def compute_features():
             df.index = df.index.tz_localize(None)
             
         # --- Technical Features ---
-        # Returns
+        # Returns & Momentum
         df['ret_1d'] = df['Close'].pct_change(1)
         df['ret_5d'] = df['Close'].pct_change(5)
         df['ret_20d'] = df['Close'].pct_change(20)
         
-        # Moving Averages
+        # Lagged Return Features (Autocorrelation signals)
+        df['ret_1d_lag1'] = df['ret_1d'].shift(1)
+        df['ret_1d_lag2'] = df['ret_1d'].shift(2)
+        df['ret_5d_lag5'] = df['ret_5d'].shift(5)
+        
+        # Moving Averages & Ratios
         df['ma_5'] = ta.sma(df['Close'], length=5)
         df['ma_20'] = ta.sma(df['Close'], length=20)
         df['ma_50'] = ta.sma(df['Close'], length=50)
         df['price_vs_ma20'] = df['Close'] / df['ma_20'] - 1
+        df['ma_ratio_5_20'] = df['ma_5'] / df['ma_20'] - 1
+        
+        # Bollinger Bands & Bandwidth
+        bb = ta.bbands(df['Close'], length=20, std=2)
+        if bb is not None and not bb.empty:
+            bbl = bb.iloc[:, 0]  # lower
+            bbm = bb.iloc[:, 1]  # mid
+            bbu = bb.iloc[:, 2]  # upper
+            df['bb_pct'] = (df['Close'] - bbl) / (bbu - bbl + 1e-8)
+            df['bb_width'] = (bbu - bbl) / (bbm + 1e-8)
+        else:
+            df['bb_pct'] = 0.5
+            df['bb_width'] = 0.0
+            
+        # Normalized ATR (relative volatility)
+        if 'High' in df.columns and 'Low' in df.columns:
+            atr = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['atr_pct'] = atr / (df['Close'] + 1e-8)
+        else:
+            df['atr_pct'] = 0.0
+            
+        # Volume Dynamics
+        if 'Volume' in df.columns:
+            vol_ma20 = df['Volume'].rolling(window=20).mean()
+            df['vol_vs_ma20'] = df['Volume'] / (vol_ma20 + 1e-8) - 1
+        else:
+            df['vol_vs_ma20'] = 0.0
         
         # RSI & MACD
         df['rsi_14'] = ta.rsi(df['Close'], length=14)
@@ -45,12 +104,27 @@ def compute_features():
             df['macd_signal'] = macd.iloc[:, 1]
             df['macd_hist'] = macd.iloc[:, 2]
             
-        # Volatility
+        # Historical Volatility
         df['volatility_20d'] = df['ret_1d'].rolling(window=20).std()
         
-        # Target: 5-day forward return
-        # Shift -5 means today's target is the return from today to 5 days in the future
+        # Calendar Seasonality Features
+        df['day_of_week'] = df.index.dayofweek
+        df['month'] = df.index.month
+        
+        # --- Merge Benchmark Features ---
+        if not benchmarks.empty:
+            df = df.join(benchmarks, how='left')
+            # Forward-fill benchmark columns in case of slight holiday mismatch
+            for bcol in benchmarks.columns:
+                df[bcol] = df[bcol].ffill()
+            if 'nifty_ret_5d' in df.columns:
+                df['excess_ret_5d'] = df['ret_5d'] - df['nifty_ret_5d']
+        
+        # --- Targets ---
+        # Target 1: 5-day forward continuous percentage return
         df['target_5d'] = df['Close'].shift(-5) / df['Close'] - 1
+        # Target 2: 5-day forward binary direction (1 if return > 0 else 0)
+        df['target_direction'] = (df['target_5d'] > 0).astype('Int64')
         
         # --- Fundamental Features ---
         fin_path = os.path.join(DATA_DIR, f"{ticker_safe}_financials.parquet")
@@ -83,23 +157,19 @@ def compute_features():
             # Sort fund index chronologically (oldest to newest) to calculate YoY correctly
             fund = fund.sort_index()
             if 'revenue' in fund.columns:
-                fund['revenue_yoy'] = fund['revenue'].pct_change(periods=4) # 4 quarters = 1 year
+                fund['revenue_yoy'] = fund['revenue'].pct_change(periods=4, fill_method=None) # 4 quarters = 1 year
                 
             # Merge with price data using forward-fill
-            # 1. Combine indexes to ensure fundamental dates exist
             combined_index = df.index.union(fund.index).sort_values()
             fund_reindexed = fund.reindex(combined_index).ffill()
-            
-            # 2. Extract only the dates present in the price dataframe
             fund_daily = fund_reindexed.reindex(df.index)
             
-            # 3. Add to main dataframe
+            # Add to main dataframe
             for col in ['revenue_yoy', 'net_margin', 'debt_to_equity']:
                 if col in fund_daily.columns:
                     df[col] = fund_daily[col]
                 else:
                     df[col] = pd.NA
-                    
         else:
             print(f"  Warning: Fundamentals missing for {ticker}, filling with NA.")
             df['revenue_yoy'] = pd.NA

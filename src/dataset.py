@@ -27,10 +27,16 @@ def load_data():
     combined = combined.sort_index()
     return combined
 
-def get_walk_forward_splits(df, n_splits=3, test_size_days=252):
+def get_walk_forward_splits(df, n_splits=3, test_size_days=252, purge_days=5):
     """
-    Yields (train_indices, test_indices) for expanding window walk-forward validation.
-    Because we have multiple tickers, we split by unique dates, then get indices.
+    Yields (train_mask, test_mask) for expanding window walk-forward validation
+    with an embargo / purge gap to eliminate label lookahead leakage.
+    
+    Args:
+        df (pd.DataFrame): Combined dataset sorted by DatetimeIndex.
+        n_splits (int): Number of walk-forward folds.
+        test_size_days (int): Number of trading days in each test window.
+        purge_days (int): Number of days purged between train and test windows (matches target horizon).
     """
     unique_dates = df.index.unique().sort_values()
     total_days = len(unique_dates)
@@ -43,10 +49,11 @@ def get_walk_forward_splits(df, n_splits=3, test_size_days=252):
         test_end_idx = total_days - (n_splits - 1 - i) * test_size_days
         test_start_idx = test_end_idx - test_size_days
         
-        if test_start_idx <= 0:
+        if test_start_idx <= purge_days:
             continue
             
-        train_end_idx = test_start_idx
+        # Purge gap: train ends `purge_days` before test starts
+        train_end_idx = test_start_idx - purge_days
         
         train_dates = unique_dates[0:train_end_idx]
         test_dates = unique_dates[test_start_idx:test_end_idx]
