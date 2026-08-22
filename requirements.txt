@@ -10,3 +10,5 @@ pyarrow>=14.0.0,<19.0.0
 fastapi>=0.100.0,<1.0.0
 uvicorn>=0.23.0,<1.0.0
 streamlit>=1.30.0
+optuna>=3.5.0
+

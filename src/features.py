@@ -9,9 +9,11 @@ from src.config import TICKERS
 DATA_DIR = "data"
 
 def load_benchmark_data():
-    """Load and process Nifty 50 and India VIX benchmarks."""
+    """Load and process Nifty 50, India VIX, USD/INR, and Brent Crude benchmarks."""
     nifty_path = os.path.join(DATA_DIR, "nifty50_price.parquet")
     vix_path = os.path.join(DATA_DIR, "vix_price.parquet")
+    usdinr_path = os.path.join(DATA_DIR, "usdinr_price.parquet")
+    crude_path = os.path.join(DATA_DIR, "crude_price.parquet")
     
     benchmarks = pd.DataFrame()
     
@@ -23,6 +25,7 @@ def load_benchmark_data():
         benchmarks['nifty_ret_1d'] = nifty['Close'].pct_change(1)
         benchmarks['nifty_ret_5d'] = nifty['Close'].pct_change(5)
         benchmarks['nifty_vol_20d'] = benchmarks['nifty_ret_1d'].rolling(20).std()
+        benchmarks['nifty_fwd_5d'] = nifty['Close'].shift(-5) / nifty['Close'] - 1
     
     if os.path.exists(vix_path):
         vix = pd.read_parquet(vix_path)
@@ -30,6 +33,23 @@ def load_benchmark_data():
             vix.index = vix.index.tz_localize(None)
         benchmarks['vix_close'] = vix['Close']
         benchmarks['vix_ret_1d'] = vix['Close'].pct_change(1)
+        
+    if os.path.exists(usdinr_path):
+        usdinr = pd.read_parquet(usdinr_path)
+        if usdinr.index.tz is not None:
+            usdinr.index = usdinr.index.tz_localize(None)
+        benchmarks['usdinr_close'] = usdinr['Close']
+        benchmarks['usdinr_ret_1d'] = usdinr['Close'].pct_change(1)
+        benchmarks['usdinr_ret_5d'] = usdinr['Close'].pct_change(5)
+
+    if os.path.exists(crude_path):
+        crude = pd.read_parquet(crude_path)
+        if crude.index.tz is not None:
+            crude.index = crude.index.tz_localize(None)
+        benchmarks['crude_close'] = crude['Close']
+        benchmarks['crude_ret_1d'] = crude['Close'].pct_change(1)
+        benchmarks['crude_ret_5d'] = crude['Close'].pct_change(5)
+        benchmarks['crude_vol_20d'] = benchmarks['crude_ret_1d'].rolling(20).std()
         
     return benchmarks
 
@@ -125,6 +145,13 @@ def compute_features():
         df['target_5d'] = df['Close'].shift(-5) / df['Close'] - 1
         # Target 2: 5-day forward binary direction (1 if return > 0 else 0)
         df['target_direction'] = (df['target_5d'] > 0).astype('Int64')
+        # Target 3: 5-day forward excess alpha return over Nifty 50
+        if 'nifty_fwd_5d' in df.columns:
+            df['target_alpha_5d'] = df['target_5d'] - df['nifty_fwd_5d']
+            df['target_alpha_dir'] = (df['target_alpha_5d'] > 0).astype('Int64')
+        else:
+            df['target_alpha_5d'] = df['target_5d']
+            df['target_alpha_dir'] = df['target_direction']
         
         # --- Fundamental Features ---
         fin_path = os.path.join(DATA_DIR, f"{ticker_safe}_financials.parquet")

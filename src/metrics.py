@@ -10,6 +10,7 @@ class MetricResult:
     rmse: float
     mape: float
     directional_accuracy: float
+    alpha_accuracy: float
     high_conf_directional_accuracy: float
     roc_auc: float
     baseline_accuracy: float

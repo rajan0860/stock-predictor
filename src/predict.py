@@ -56,6 +56,7 @@ def predict(ticker, force_refresh=True):
     try:
         model_data = joblib.load(MODEL_PATH)
         model = model_data.get('regressor', model_data.get('model'))
+        alpha_model = model_data.get('alpha_model')
         classifier = model_data.get('classifier')
         feature_cols = model_data['feature_cols']
     except Exception as e:
@@ -72,9 +73,10 @@ def predict(ticker, force_refresh=True):
     if 'ticker' in X.columns:
         X['ticker'] = X['ticker'].astype('category')
         
-    pred_return = model.predict(X)[0]
-    latest_price = latest_row['Close'].values[0]
-    implied_price = latest_price * (1 + pred_return)
+    pred_return = float(model.predict(X)[0])
+    pred_alpha = float(alpha_model.predict(X)[0]) if alpha_model is not None else None
+    latest_price = float(latest_row['Close'].values[0])
+    implied_price = float(latest_price * (1 + pred_return))
     
     prob_up = None
     if classifier is not None:
@@ -87,6 +89,8 @@ def predict(ticker, force_refresh=True):
     print(f"\nAs of {date_str}, {ticker} closed at Rs.{latest_price:.2f}.")
     print(f"The model predicts a {pred_return*100:+.1f}% return over the next 5 trading days,")
     print(f"implying a price around Rs.{implied_price:.2f}.")
+    if pred_alpha is not None:
+        print(f"Expected Alpha vs Nifty 50: {pred_alpha*100:+.2f}%")
     if prob_up is not None:
         direction_label = "BULLISH (UP)" if prob_up >= 0.5 else "BEARISH (DOWN)"
         print(f"Directional Signal: {direction_label} (Confidence: {prob_up*100:.1f}%)")
@@ -95,9 +99,10 @@ def predict(ticker, force_refresh=True):
     return {
         'date': date_str,
         'ticker': ticker,
-        'latest_price': float(latest_price),
-        'pred_return': float(pred_return),
-        'implied_price': float(implied_price),
+        'latest_price': latest_price,
+        'pred_return': pred_return,
+        'pred_alpha': pred_alpha,
+        'implied_price': implied_price,
         'prob_up': prob_up
     }
 

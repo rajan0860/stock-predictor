@@ -10,7 +10,9 @@ DATA_DIR = "data"
 
 BENCHMARK_TICKERS = {
     "^NSEI": "nifty50_price.parquet",
-    "^INDIAVIX": "vix_price.parquet"
+    "^INDIAVIX": "vix_price.parquet",
+    "USDINR=X": "usdinr_price.parquet",
+    "BZ=F": "crude_price.parquet"
 }
 
 def fetch_data():
