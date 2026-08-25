@@ -36,5 +36,7 @@ MACRO_INDICATORS = {
     "Brent Crude": {"ticker": "BZ=F", "prefix": "$", "suffix": "/bbl", "desc": "Global Energy Cost"},
     "Dollar Index (DXY)": {"ticker": "DX-Y.NYB", "prefix": "", "suffix": "", "desc": "USD Global Strength"},
     "USD / INR": {"ticker": "USDINR=X", "prefix": "₹", "suffix": "", "desc": "Forex Rate"},
+    "US 10Y Yield": {"ticker": "^TNX", "prefix": "", "suffix": "%", "desc": "Risk-Free Rate / FII Flows"},
 }
+
 

@@ -141,7 +141,7 @@ if macro_data:
                 m_chart = pd.DataFrame(m_hist['Close'])
                 if isinstance(m_chart.columns, pd.MultiIndex):
                     m_chart.columns = [col[0] for col in m_chart.columns]
-                st.line_chart(m_chart, use_container_width=True)
+                st.line_chart(m_chart, width='stretch')
             else:
                 st.info("Macro historical data unavailable.")
         except Exception as e:
@@ -172,7 +172,8 @@ with tab1:
             st.session_state.prediction_ticker = None
 
         # Main prediction logic
-        predict_clicked = st.button("Predict 5-Day Return", use_container_width=True)
+        predict_clicked = st.button("Predict 5-Day Return", width='stretch')
+
 
     if predict_clicked:
         with st.spinner(f"Fetching live data and running model for {ticker}..."):
@@ -248,6 +249,22 @@ with tab1:
         s3.metric(label="Data As Of", value=result['date'])
         
         st.markdown("---")
+        
+        # Macro Factor Context directly on main prediction screen
+        st.markdown("#### 🌐 Macro Factor Alignment")
+        if macro_data:
+            m_cols = st.columns(len(macro_data))
+            for m_col, (m_name, m_val) in zip(m_cols, macro_data.items()):
+                p_str = f"{m_val['prefix']}{m_val['price']:,.2f}{m_val['suffix']}"
+                m_col.metric(
+                    label=m_name,
+                    value=p_str,
+                    delta=m_val["delta"]
+                )
+                m_col.caption(f"<span style='color:#718096; font-size:0.7rem;'>{m_val['desc']}</span>", unsafe_allow_html=True)
+        
+        st.markdown("---")
+
         
         # Interactive Candlestick & Volume Chart
         st.markdown("### 📊 Interactive Technical Price Chart")
