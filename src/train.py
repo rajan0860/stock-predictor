@@ -74,7 +74,7 @@ def train_and_evaluate():
         'target_5d', 'target_direction', 'target_alpha_5d', 'target_alpha_dir',
         'Open', 'High', 'Low', 'Close', 'Volume', 
         'Dividends', 'Stock Splits',
-        'nifty_close', 'vix_close', 'usdinr_close', 'crude_close', 'nifty_fwd_5d'
+        'nifty_close', 'vix_close', 'usdinr_close', 'crude_close', 'dxy_close', 'us10y_close', 'nifty_fwd_5d'
     ]
     feature_cols = [c for c in train_df.columns if c not in exclude_cols]
     

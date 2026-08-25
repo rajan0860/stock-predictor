@@ -12,7 +12,9 @@ BENCHMARK_TICKERS = {
     "^NSEI": "nifty50_price.parquet",
     "^INDIAVIX": "vix_price.parquet",
     "USDINR=X": "usdinr_price.parquet",
-    "BZ=F": "crude_price.parquet"
+    "BZ=F": "crude_price.parquet",
+    "DX-Y.NYB": "dxy_price.parquet",
+    "^TNX": "us10y_price.parquet"
 }
 
 def fetch_data():

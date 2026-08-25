@@ -9,11 +9,13 @@ from src.config import TICKERS
 DATA_DIR = "data"
 
 def load_benchmark_data():
-    """Load and process Nifty 50, India VIX, USD/INR, and Brent Crude benchmarks."""
+    """Load and process Nifty 50, India VIX, USD/INR, Brent Crude, DXY, and US 10Y Yield benchmarks."""
     nifty_path = os.path.join(DATA_DIR, "nifty50_price.parquet")
     vix_path = os.path.join(DATA_DIR, "vix_price.parquet")
     usdinr_path = os.path.join(DATA_DIR, "usdinr_price.parquet")
     crude_path = os.path.join(DATA_DIR, "crude_price.parquet")
+    dxy_path = os.path.join(DATA_DIR, "dxy_price.parquet")
+    us10y_path = os.path.join(DATA_DIR, "us10y_price.parquet")
     
     benchmarks = pd.DataFrame()
     
@@ -50,6 +52,22 @@ def load_benchmark_data():
         benchmarks['crude_ret_1d'] = crude['Close'].pct_change(1)
         benchmarks['crude_ret_5d'] = crude['Close'].pct_change(5)
         benchmarks['crude_vol_20d'] = benchmarks['crude_ret_1d'].rolling(20).std()
+
+    if os.path.exists(dxy_path):
+        dxy = pd.read_parquet(dxy_path)
+        if dxy.index.tz is not None:
+            dxy.index = dxy.index.tz_localize(None)
+        benchmarks['dxy_close'] = dxy['Close']
+        benchmarks['dxy_ret_1d'] = dxy['Close'].pct_change(1)
+        benchmarks['dxy_ret_5d'] = dxy['Close'].pct_change(5)
+
+    if os.path.exists(us10y_path):
+        us10y = pd.read_parquet(us10y_path)
+        if us10y.index.tz is not None:
+            us10y.index = us10y.index.tz_localize(None)
+        benchmarks['us10y_close'] = us10y['Close']
+        benchmarks['us10y_ret_1d'] = us10y['Close'].pct_change(1)
+        benchmarks['us10y_ret_5d'] = us10y['Close'].pct_change(5)
         
     return benchmarks
 
