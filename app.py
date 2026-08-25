@@ -4,8 +4,11 @@ import pandas as pd
 import datetime
 import sys
 import os
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Ensure src modules can be imported
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.predict import predict
 
@@ -162,17 +165,34 @@ with tab1:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # Initialize session state for active prediction
+        if "prediction_result" not in st.session_state:
+            st.session_state.prediction_result = None
+        if "prediction_ticker" not in st.session_state:
+            st.session_state.prediction_ticker = None
+
         # Main prediction logic
         predict_clicked = st.button("Predict 5-Day Return", use_container_width=True)
 
     if predict_clicked:
         with st.spinner(f"Fetching live data and running model for {ticker}..."):
-            # Wrap predict in try/except in case of issues
             try:
-                result = get_cached_prediction(ticker)
-                
-                if result:
-                    st.success(f"Prediction generated successfully for {ticker}!")
+                res = get_cached_prediction(ticker)
+                if res:
+                    st.session_state.prediction_result = res
+                    st.session_state.prediction_ticker = ticker
+                else:
+                    st.session_state.prediction_result = None
+                    st.error("Model returned None. Have you trained the model by running `python src/train.py`?")
+            except Exception as e:
+                st.session_state.prediction_result = None
+                st.error(f"An error occurred during prediction: {e}")
+
+    # Render persisted prediction and chart if available for selected ticker
+    if st.session_state.prediction_result and st.session_state.prediction_ticker == ticker:
+        result = st.session_state.prediction_result
+        st.success(f"Prediction generated successfully for {ticker}!")
+
 
                     
                     # Metrics Display
@@ -230,25 +250,146 @@ with tab1:
                     
                     st.markdown("---")
                     
-                    # Historical Chart
-                    st.markdown("### Recent Price History (30 Days)")
+                    # Interactive Candlestick & Volume Chart
+                    st.markdown("### 📊 Interactive Technical Price Chart")
+                    
+                    # Timeframe selection
+                    tf_col1, tf_col2 = st.columns([1, 1])
+                    with tf_col1:
+                        timeframe = st.radio(
+                            "Select Timeframe:",
+                            options=["1 Month (30D)", "3 Months (90D)", "6 Months", "1 Year"],
+                            index=1,
+                            horizontal=True
+                        )
+                    
+                    tf_days_map = {
+                        "1 Month (30D)": 45,
+                        "3 Months (90D)": 110,
+                        "6 Months": 200,
+                        "1 Year": 390
+                    }
+                    lookback_days = tf_days_map.get(timeframe, 110)
+                    
                     try:
                         end_date = datetime.datetime.now()
-                        start_date = end_date - datetime.timedelta(days=45) # 45 calendar days ~ 30 trading days
+                        start_date = end_date - datetime.timedelta(days=lookback_days)
                         hist_data = yf.download(ticker, start=start_date, end=end_date, progress=False)
                         
                         if not hist_data.empty:
-                            # Streamlit line chart requires a flat index and specific columns
-                            chart_data = pd.DataFrame(hist_data['Close'])
-                            # Handle multi-level columns if yfinance returns them
-                            if isinstance(chart_data.columns, pd.MultiIndex):
-                                chart_data.columns = [col[0] for col in chart_data.columns]
+                            if isinstance(hist_data.columns, pd.MultiIndex):
+                                hist_data.columns = [col[0] for col in hist_data.columns]
                                 
-                            st.line_chart(chart_data, use_container_width=True)
+                            hist_data['SMA_20'] = hist_data['Close'].rolling(20).mean()
+                            hist_data['SMA_50'] = hist_data['Close'].rolling(50).mean()
+                            
+                            # Create Subplots: Candlestick (Top) & Volume (Bottom)
+                            fig = make_subplots(
+                                rows=2, cols=1,
+                                shared_xaxes=True,
+                                vertical_spacing=0.04,
+                                row_heights=[0.72, 0.28],
+                                subplot_titles=(f"{ticker} Price & Moving Averages", "Daily Trading Volume")
+                            )
+                            
+                            # 1. Candlestick
+                            fig.add_trace(
+                                go.Candlestick(
+                                    x=hist_data.index,
+                                    open=hist_data['Open'],
+                                    high=hist_data['High'],
+                                    low=hist_data['Low'],
+                                    close=hist_data['Close'],
+                                    name="Price",
+                                    increasing_line_color='#26a69a',
+                                    decreasing_line_color='#ef5350'
+                                ),
+                                row=1, col=1
+                            )
+                            
+                            # 2. Moving Average Overlays
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=hist_data.index,
+                                    y=hist_data['SMA_20'],
+                                    name="20-Day SMA",
+                                    line=dict(color="#FFD700", width=1.5)
+                                ),
+                                row=1, col=1
+                            )
+                            
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=hist_data.index,
+                                    y=hist_data['SMA_50'],
+                                    name="50-Day SMA",
+                                    line=dict(color="#29B6F6", width=1.5)
+                                ),
+                                row=1, col=1
+                            )
+                            
+                            # 3. 5-Day Model Target Forward Line
+                            last_date = hist_data.index[-1]
+                            target_date = last_date + datetime.timedelta(days=7) # ~5 business days
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=[last_date, target_date],
+                                    y=[latest_price, implied_price],
+                                    mode="lines+markers",
+                                    name="5-Day Target Forecast",
+                                    line=dict(color="#AB47BC", width=2.5, dash="dash"),
+                                    marker=dict(size=8, symbol="star")
+                                ),
+                                row=1, col=1
+                            )
+                            
+                            # 4. Volume Bar Chart
+                            vol_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(hist_data['Close'], hist_data['Open'])]
+                            fig.add_trace(
+                                go.Bar(
+                                    x=hist_data.index,
+                                    y=hist_data['Volume'],
+                                    name="Volume",
+                                    marker_color=vol_colors,
+                                    showlegend=False
+                                ),
+                                row=2, col=1
+                            )
+                            
+                            # Layout styling
+                            fig.update_layout(
+                                template="plotly_dark",
+                                paper_bgcolor="#0E1117",
+                                plot_bgcolor="#161B22",
+                                xaxis_rangeslider_visible=False,
+                                height=550,
+                                margin=dict(l=10, r=10, t=30, b=10),
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                hovermode="x unified"
+                            )
+                            fig.update_yaxes(title_text="Price (₹)", row=1, col=1, gridcolor="#21262D")
+                            fig.update_yaxes(title_text="Volume", row=2, col=1, gridcolor="#21262D")
+                            fig.update_xaxes(gridcolor="#21262D")
+                            
+                            st.plotly_chart(fig, width='stretch')
+                            
+                            # Quick Stats summary below chart
+                            p_high = hist_data['High'].max()
+                            p_low = hist_data['Low'].min()
+                            avg_vol = hist_data['Volume'].mean()
+                            sma20_last = hist_data['SMA_20'].iloc[-1]
+                            dist_sma20 = ((latest_price / sma20_last) - 1) * 100 if pd.notna(sma20_last) else 0
+                            
+                            qs1, qs2, qs3, qs4 = st.columns(4)
+                            qs1.metric(label="Period High", value=f"₹{p_high:,.2f}")
+                            qs2.metric(label="Period Low", value=f"₹{p_low:,.2f}")
+                            qs3.metric(label="Avg Daily Volume", value=f"{avg_vol:,.0f}")
+                            qs4.metric(label="vs 20-Day SMA", value=f"{dist_sma20:+.2f}%", delta=f"{dist_sma20:.2f}%", delta_color="normal")
                         else:
                             st.warning("Could not fetch historical data for chart.")
                     except Exception as e:
                         st.warning(f"Could not load chart: {e}")
+
                         
                     # Disclaimer
                     st.caption("⚠️ **Disclaimer:** This is a machine learning model estimate, not financial advice. Do not trade based solely on these predictions.")
