@@ -17,37 +17,29 @@ def predict(ticker, force_refresh=True):
         return None
         
     if force_refresh:
-        # Re-run fetch and features for this specific ticker to get live data
+        # Fast incremental delta update for target stock and macro benchmarks
         try:
-            from src.fetch_data import TICKERS as FETCH_TICKERS
-            from src.features import TICKERS as FEAT_TICKERS
-            import src.fetch_data as fetch_data
-            import src.features as features
+            from src.fetch_data import update_stock_incremental, update_benchmarks_incremental
+            from src.features import compute_single_ticker_features
             
-            # Temporarily override TICKERS to just this one so it's fast
-            original_fetch_tickers = FETCH_TICKERS.copy()
-            original_feat_tickers = FEAT_TICKERS.copy()
+            # 1. Delta fetch recent days
+            update_benchmarks_incremental(lookback_days=15)
+            update_stock_incremental(ticker, lookback_days=15)
             
-            fetch_data.TICKERS = [ticker]
-            features.TICKERS = [ticker]
-            
-            # Suppress prints for cleaner output
-            import sys, io
-            old_stdout = sys.stdout
-            sys.stdout = io.StringIO()
-            try:
-                fetch_data.fetch_data()
-                features.compute_features()
-            finally:
-                sys.stdout = old_stdout
-                fetch_data.TICKERS = original_fetch_tickers
-                features.TICKERS = original_feat_tickers
+            # 2. Recompute features for this single stock
+            compute_single_ticker_features(ticker, verbose=False)
         except Exception as e:
-            print(f"Warning: Live refresh failed ({e}), using cached data.")
+            print(f"Warning: Live incremental refresh failed ({e}), using cached data.")
 
-    from src.dataset import load_data
-    df = load_data()
-    ticker_df = df[df['ticker'] == ticker].copy()
+    ticker_safe = ticker.replace('.', '_')
+    feature_path = os.path.join("data", f"{ticker_safe}_features.parquet")
+    
+    if os.path.exists(feature_path):
+        ticker_df = pd.read_parquet(feature_path)
+    else:
+        from src.dataset import load_data
+        df = load_data()
+        ticker_df = df[df['ticker'] == ticker].copy()
     
     if len(ticker_df) == 0:
         print(f"Error: No data found for {ticker}.")
@@ -55,6 +47,7 @@ def predict(ticker, force_refresh=True):
         
     try:
         model_data = joblib.load(MODEL_PATH)
+
         model = model_data.get('regressor', model_data.get('model'))
         alpha_model = model_data.get('alpha_model')
         classifier = model_data.get('classifier')

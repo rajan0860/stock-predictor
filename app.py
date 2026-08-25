@@ -161,23 +161,29 @@ with tab1:
         # Main prediction logic
         predict_clicked = st.button("Predict 5-Day Return", use_container_width=True)
 
+@st.cache_data(ttl=120)
+def get_cached_prediction(stock_ticker: str):
+    return predict(stock_ticker, force_refresh=True)
+
     if predict_clicked:
         with st.spinner(f"Fetching live data and running model for {ticker}..."):
             # Wrap predict in try/except in case of issues
             try:
-                result = predict(ticker, force_refresh=True)
+                result = get_cached_prediction(ticker)
                 
                 if result:
                     st.success(f"Prediction generated successfully for {ticker}!")
                     
                     # Metrics Display
-                    st.markdown("### Model Forecast")
+                    st.markdown("### 🎯 Model Forecast & Signal Analysis")
                     m1, m2, m3 = st.columns(3)
                     
                     # Format metrics
                     latest_price = result['latest_price']
                     implied_price = result['implied_price']
                     pred_return = result['pred_return']
+                    pred_alpha = result.get('pred_alpha')
+                    prob_up = result.get('prob_up')
                     
                     delta_price = implied_price - latest_price
                     delta_price_str = f"-₹{abs(delta_price):,.2f}" if delta_price < 0 else f"₹{delta_price:,.2f}"
@@ -187,19 +193,39 @@ with tab1:
                         value=f"₹{latest_price:,.2f}"
                     )
                     m2.metric(
-                        label="Predicted Return", 
+                        label="Predicted 5-Day Return", 
                         value=f"{pred_return*100:+.2f}%",
                         delta=f"{pred_return*100:.2f}%",
                         delta_color="normal"
                     )
                     m3.metric(
-                        label="Implied 5-Day Target", 
+                        label="Implied Target Price", 
                         value=f"₹{implied_price:,.2f}",
                         delta=delta_price_str,
                         delta_color="normal"
                     )
                     
-                    st.info("📅 **As of:** " + result['date'])
+                    # Secondary Metrics Row: Direction & Alpha
+                    s1, s2, s3 = st.columns(3)
+                    if prob_up is not None:
+                        is_bullish = prob_up >= 0.5
+                        dir_text = "🟢 Bullish (UP)" if is_bullish else "🔴 Bearish (DOWN)"
+                        conf_str = f"Confidence: {prob_up*100:.1f}%" if is_bullish else f"Confidence: {(1-prob_up)*100:.1f}%"
+                        s1.metric(label="Directional Signal", value=dir_text, delta=conf_str, delta_color="off")
+                    else:
+                        s1.metric(label="Directional Signal", value="Neutral")
+                        
+                    if pred_alpha is not None:
+                        s2.metric(
+                            label="Expected Alpha vs Nifty 50",
+                            value=f"{pred_alpha*100:+.2f}%",
+                            delta=f"{pred_alpha*100:+.2f}% vs Nifty",
+                            delta_color="normal"
+                        )
+                    else:
+                        s2.metric(label="Expected Alpha", value="N/A")
+                        
+                    s3.metric(label="Data As Of", value=result['date'])
                     
                     st.markdown("---")
                     
