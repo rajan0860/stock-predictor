@@ -215,15 +215,16 @@ def compute_single_ticker_features(ticker: str, benchmarks: pd.DataFrame = None,
         # Add to main dataframe
         for col in ['revenue_yoy', 'net_margin', 'debt_to_equity']:
             if col in fund_daily.columns:
-                df[col] = fund_daily[col]
+                df[col] = pd.to_numeric(fund_daily[col], errors='coerce').astype(float)
             else:
-                df[col] = pd.NA
+                df[col] = float('nan')
     else:
         if verbose:
-            print(f"  Warning: Fundamentals missing for {ticker}, filling with NA.")
-        df['revenue_yoy'] = pd.NA
-        df['net_margin'] = pd.NA
-        df['debt_to_equity'] = pd.NA
+            print(f"  Warning: Fundamentals missing for {ticker}, filling with NaN.")
+        df['revenue_yoy'] = float('nan')
+        df['net_margin'] = float('nan')
+        df['debt_to_equity'] = float('nan')
+
         
     # Add ticker column
     df['ticker'] = ticker

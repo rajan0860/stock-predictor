@@ -63,8 +63,12 @@ def predict(ticker, force_refresh=True):
     # Make prediction
     X = latest_row[feature_cols].copy()
     
-    if 'ticker' in X.columns:
-        X['ticker'] = X['ticker'].astype('category')
+    for col in feature_cols:
+        if col == 'ticker':
+            X[col] = X[col].astype('category')
+        else:
+            X[col] = pd.to_numeric(X[col], errors='coerce').astype(float)
+
         
     pred_return = float(model.predict(X)[0])
     pred_alpha = float(alpha_model.predict(X)[0]) if alpha_model is not None else None
