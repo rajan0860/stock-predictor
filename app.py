@@ -406,6 +406,50 @@ with tab1:
         s3.metric(label="Data As Of", value=result['date'])
         
         st.markdown("---")
+
+        # Transparent Forecast-Quality & Empirical Reliability Panel
+        q_metrics = result.get('quality_metrics')
+        if q_metrics:
+            st.markdown("#### 🛡️ Forecast Quality & Empirical Reliability")
+            st.markdown(
+                f"""
+                <div style="background: rgba(33, 150, 243, 0.08); border-left: 4px solid #2196F3; padding: 12px 16px; border-radius: 6px; margin-bottom: 15px; font-size: 0.95rem; line-height: 1.5;">
+                    🔍 <b>Historical Validation Benchmark:</b><br>
+                    In <b>{q_metrics['comparable_samples']} comparable prior signals</b> ({q_metrics['scope']}), 
+                    the model was directionally correct <b>{q_metrics['directional_accuracy_pct']:.1f}%</b> of the time, 
+                    with a median absolute 5-day error of <b>±{q_metrics['median_abs_error_pct']:.2f}%</b>.
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            qc1, qc2, qc3, qc4 = st.columns(4)
+            qc1.metric(
+                label="Historical Win Rate",
+                value=f"{q_metrics['directional_accuracy_pct']:.1f}%",
+                delta=f"{q_metrics['comparable_samples']} setups",
+                delta_color="off"
+            )
+            qc2.metric(
+                label="Median 5-Day Error",
+                value=f"±{q_metrics['median_abs_error_pct']:.2f}%",
+                delta=f"Mean: ±{q_metrics['mean_abs_error_pct']:.2f}%",
+                delta_color="off"
+            )
+            
+            snr_val = q_metrics['snr']
+            qc3.metric(
+                label="Signal-to-Noise Ratio (SNR)",
+                value=f"{snr_val:.2f}x",
+                delta="|Forecast| / Med Error",
+                delta_color="off"
+            )
+            
+            qc4.markdown(f"**Economic Conviction:**<br>{q_metrics['significance']}", unsafe_allow_html=True)
+            qc4.caption(f"{q_metrics['significance_desc']}<br>Avg Win: +{q_metrics['avg_win_pct']:.2f}% | Avg Loss: -{q_metrics['avg_loss_pct']:.2f}%", unsafe_allow_html=True)
+            
+            st.markdown("---")
+
         
         # Macro Factor Context directly on main prediction screen
         st.markdown("#### 🌐 Macro Factor Alignment")

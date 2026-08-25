@@ -93,6 +93,16 @@ def predict(ticker, force_refresh=True):
         print(f"Directional Signal: {direction_label} (Confidence: {prob_up*100:.1f}%)")
     print("This is a model estimate, not financial advice.\n")
     
+    # Compute empirical forecast quality and reliability on comparable historical signals
+    try:
+        from src.signal_quality import get_forecast_quality_metrics
+        quality_metrics = get_forecast_quality_metrics(ticker, pred_return, prob_up)
+    except Exception:
+        quality_metrics = None
+
+    if quality_metrics:
+        print(f"📊 Historical Reliability: In comparable prior signals ({quality_metrics['comparable_samples']} setups), the model was directionally correct {quality_metrics['directional_accuracy_pct']:.1f}% of the time, with median absolute 5-day error of {quality_metrics['median_abs_error_pct']:.2f}%.")
+
     return {
         'date': date_str,
         'ticker': ticker,
@@ -100,8 +110,10 @@ def predict(ticker, force_refresh=True):
         'pred_return': pred_return,
         'pred_alpha': pred_alpha,
         'implied_price': implied_price,
-        'prob_up': prob_up
+        'prob_up': prob_up,
+        'quality_metrics': quality_metrics
     }
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
