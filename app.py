@@ -103,6 +103,10 @@ def fetch_macro_summary():
             pass
     return data
 
+@st.cache_data(ttl=120)
+def get_cached_prediction(stock_ticker: str):
+    return predict(stock_ticker, force_refresh=True)
+
 # Display Macro Market Pulse at top
 macro_data = fetch_macro_summary()
 if macro_data:
@@ -161,10 +165,6 @@ with tab1:
         # Main prediction logic
         predict_clicked = st.button("Predict 5-Day Return", use_container_width=True)
 
-@st.cache_data(ttl=120)
-def get_cached_prediction(stock_ticker: str):
-    return predict(stock_ticker, force_refresh=True)
-
     if predict_clicked:
         with st.spinner(f"Fetching live data and running model for {ticker}..."):
             # Wrap predict in try/except in case of issues
@@ -173,6 +173,7 @@ def get_cached_prediction(stock_ticker: str):
                 
                 if result:
                     st.success(f"Prediction generated successfully for {ticker}!")
+
                     
                     # Metrics Display
                     st.markdown("### 🎯 Model Forecast & Signal Analysis")
