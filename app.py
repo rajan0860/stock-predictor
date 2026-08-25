@@ -17,7 +17,7 @@ from src.nl_agent import get_stock_prediction, SYSTEM_PROMPT
 st.set_page_config(
     page_title="Stock Predictor",
     page_icon="📈",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed"
 )
 
@@ -35,8 +35,15 @@ st.markdown("""
     .subtitle {
         color: #A0AEC0;
         text-align: center;
-        margin-bottom: 40px;
+        margin-bottom: 25px;
         font-size: 1.1rem;
+    }
+    .macro-container {
+        background: #1E222D;
+        border-radius: 10px;
+        padding: 12px 18px;
+        margin-bottom: 25px;
+        border: 1px solid #2A2E39;
     }
     .stButton > button {
         width: 100%;
@@ -60,25 +67,101 @@ st.markdown("<h1>📈 Stock Predictor Dashboard</h1>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>Powered by LightGBM & yfinance</div>", unsafe_allow_html=True)
 
 # Import mapping for UI display
-from src.config import DISPLAY_TO_TICKER
+from src.config import DISPLAY_TO_TICKER, MACRO_INDICATORS
+
+@st.cache_data(ttl=300)
+def fetch_macro_summary():
+    data = {}
+    for name, info in MACRO_INDICATORS.items():
+        try:
+            t = yf.Ticker(info["ticker"])
+            hist = t.history(period="5d")
+            if len(hist) >= 2:
+                curr = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2]
+                chg = curr - prev
+                pct = (chg / prev) * 100
+                data[name] = {
+                    "price": curr,
+                    "delta": f"{chg:+.2f} ({pct:+.2f}%)",
+                    "delta_val": chg,
+                    "prefix": info.get("prefix", ""),
+                    "suffix": info.get("suffix", ""),
+                    "desc": info.get("desc", "")
+                }
+            elif len(hist) == 1:
+                curr = hist['Close'].iloc[-1]
+                data[name] = {
+                    "price": curr,
+                    "delta": "0.00%",
+                    "delta_val": 0,
+                    "prefix": info.get("prefix", ""),
+                    "suffix": info.get("suffix", ""),
+                    "desc": info.get("desc", "")
+                }
+        except Exception:
+            pass
+    return data
+
+# Display Macro Market Pulse at top
+macro_data = fetch_macro_summary()
+if macro_data:
+    st.markdown("### 🌍 Market Pulse & Macro Indicators")
+    cols = st.columns(len(macro_data))
+    for col, (name, val) in zip(cols, macro_data.items()):
+        prefix = val["prefix"]
+        suffix = val["suffix"]
+        price_str = f"{prefix}{val['price']:,.2f}{(' ' + suffix) if suffix else ''}"
+        col.metric(
+            label=name,
+            value=price_str,
+            delta=val["delta"]
+        )
+        col.caption(f"<span style='color:#718096; font-size:0.75rem;'>{val['desc']}</span>", unsafe_allow_html=True)
+    
+    with st.expander("📊 View Macro Trends (30-Day History)", expanded=False):
+        selected_macro = st.selectbox(
+            "Select Macro Indicator to Chart",
+            options=list(MACRO_INDICATORS.keys()),
+            index=2 # Default to Brent Crude
+        )
+        macro_ticker = MACRO_INDICATORS[selected_macro]["ticker"]
+        try:
+            m_end = datetime.datetime.now()
+            m_start = m_end - datetime.timedelta(days=45)
+            m_hist = yf.download(macro_ticker, start=m_start, end=m_end, progress=False)
+            if not m_hist.empty:
+                m_chart = pd.DataFrame(m_hist['Close'])
+                if isinstance(m_chart.columns, pd.MultiIndex):
+                    m_chart.columns = [col[0] for col in m_chart.columns]
+                st.line_chart(m_chart, use_container_width=True)
+            else:
+                st.info("Macro historical data unavailable.")
+        except Exception as e:
+            st.warning(f"Unable to load macro chart: {e}")
+
+    st.markdown("---")
+
 
 tab1, tab2 = st.tabs(["Dashboard", "AI Assistant"])
 
 with tab1:
     # User Input
-    col1, col2, col3 = st.columns([1, 2, 1])
+    c_left, col2, c_right = st.columns([1, 2, 1])
     with col2:
         selected_name = st.selectbox(
-            "Select a Stock",
+            "Select a Stock to Predict",
             options=list(DISPLAY_TO_TICKER.keys()),
             index=0
         )
         ticker = DISPLAY_TO_TICKER[selected_name]
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    # Main prediction logic
-    if st.button("Predict 5-Day Return", use_container_width=True):
+        # Main prediction logic
+        predict_clicked = st.button("Predict 5-Day Return", use_container_width=True)
+
+    if predict_clicked:
         with st.spinner(f"Fetching live data and running model for {ticker}..."):
             # Wrap predict in try/except in case of issues
             try:

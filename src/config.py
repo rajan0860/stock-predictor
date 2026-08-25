@@ -29,3 +29,12 @@ for ticker, info in SUPPORTED_STOCKS.items():
         TICKER_MAP[alias] = ticker
 
 DISPLAY_TO_TICKER = {info["name"]: ticker for ticker, info in SUPPORTED_STOCKS.items()}
+
+MACRO_INDICATORS = {
+    "Nifty 50": {"ticker": "^NSEI", "prefix": "", "suffix": "", "desc": "Benchmark Index"},
+    "India VIX": {"ticker": "^INDIAVIX", "prefix": "", "suffix": "", "desc": "Market Volatility"},
+    "Brent Crude": {"ticker": "BZ=F", "prefix": "$", "suffix": "/bbl", "desc": "Global Energy Cost"},
+    "Dollar Index (DXY)": {"ticker": "DX-Y.NYB", "prefix": "", "suffix": "", "desc": "USD Global Strength"},
+    "USD / INR": {"ticker": "USDINR=X", "prefix": "₹", "suffix": "", "desc": "Forex Rate"},
+}
+
