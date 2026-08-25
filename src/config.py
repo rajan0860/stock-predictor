@@ -18,8 +18,21 @@ SUPPORTED_STOCKS = {
     "HINDPETRO.NS": {
         "name": "Hindustan Petroleum",
         "aliases": ["hpcl", "hindustan petroleum", "hindpetro"]
+    },
+    "BPCL.NS": {
+        "name": "Bharat Petroleum (BPCL)",
+        "aliases": ["bpcl", "bharat petroleum"]
+    },
+    "KFINTECH.NS": {
+        "name": "KFin Technologies",
+        "aliases": ["kfin", "kfintech", "kfin technologies"]
+    },
+    "JYOTICNC.NS": {
+        "name": "Jyoti CNC Automation",
+        "aliases": ["jyoti cnc", "jyoti", "jyoticnc"]
     }
 }
+
 
 TICKERS = list(SUPPORTED_STOCKS.keys())
 
