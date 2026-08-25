@@ -110,6 +110,24 @@ def fetch_macro_summary():
 def get_cached_prediction(stock_ticker: str):
     return predict(stock_ticker, force_refresh=True)
 
+@st.cache_data(ttl=600)
+def fetch_macro_history(ticker_symbol: str, days: int = 90):
+    try:
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=days)
+        df = yf.download(ticker_symbol, start=start_date, end=end_date, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0] for col in df.columns]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+from src.fii_dii import fetch_fii_dii_live
+
+@st.cache_data(ttl=300)
+def get_cached_fii_dii():
+    return fetch_fii_dii_live()
+
 # Display Macro Market Pulse at top
 macro_data = fetch_macro_summary()
 if macro_data:
@@ -126,34 +144,173 @@ if macro_data:
         )
         col.caption(f"<span style='color:#718096; font-size:0.75rem;'>{val['desc']}</span>", unsafe_allow_html=True)
     
-    with st.expander("📊 View Macro Trends (30-Day History)", expanded=False):
-        selected_macro = st.selectbox(
-            "Select Macro Indicator to Chart",
-            options=list(MACRO_INDICATORS.keys()),
-            index=2 # Default to Brent Crude
+    with st.expander("📊 Interactive Macro Trends & Comparative Analysis", expanded=False):
+        view_mode = st.radio(
+            "Analysis View Mode:",
+            options=["Single Indicator Deep Dive", "Multi-Asset Relative Performance (% Change)"],
+            horizontal=True
         )
-        macro_ticker = MACRO_INDICATORS[selected_macro]["ticker"]
-        try:
-            m_end = datetime.datetime.now()
-            m_start = m_end - datetime.timedelta(days=45)
-            m_hist = yf.download(macro_ticker, start=m_start, end=m_end, progress=False)
-            if not m_hist.empty:
-                m_chart = pd.DataFrame(m_hist['Close'])
-                if isinstance(m_chart.columns, pd.MultiIndex):
-                    m_chart.columns = [col[0] for col in m_chart.columns]
-                st.line_chart(m_chart, width='stretch')
+
+        macro_tf_cols = st.columns([1, 1])
+        with macro_tf_cols[0]:
+            macro_tf = st.radio(
+                "Macro Timeframe:",
+                options=["1 Month (30D)", "3 Months (90D)", "6 Months", "1 Year"],
+                index=1,
+                horizontal=True,
+                key="macro_tf_radio"
+            )
+        
+        tf_map = {"1 Month (30D)": 45, "3 Months (90D)": 110, "6 Months": 200, "1 Year": 390}
+        days_to_fetch = tf_map.get(macro_tf, 110)
+
+        if view_mode == "Single Indicator Deep Dive":
+            with macro_tf_cols[1]:
+                selected_macro = st.selectbox(
+                    "Select Macro Indicator:",
+                    options=list(MACRO_INDICATORS.keys()),
+                    index=2 # Brent Crude
+                )
+            
+            macro_info = MACRO_INDICATORS[selected_macro]
+            m_df = fetch_macro_history(macro_info["ticker"], days=days_to_fetch)
+            
+            if not m_df.empty:
+                m_df['SMA_20'] = m_df['Close'].rolling(20).mean()
+                latest_m_val = m_df['Close'].iloc[-1]
+                p_high = m_df['High'].max() if 'High' in m_df.columns else m_df['Close'].max()
+                p_low = m_df['Low'].min() if 'Low' in m_df.columns else m_df['Close'].min()
+                
+                # Single Area Chart
+                fig_m = go.Figure()
+                fig_m.add_trace(
+                    go.Scatter(
+                        x=m_df.index,
+                        y=m_df['Close'],
+                        mode='lines',
+                        name=selected_macro,
+                        line=dict(color='#00E676', width=2.5),
+                        fill='tozeroy',
+                        fillcolor='rgba(0, 230, 118, 0.08)'
+                    )
+                )
+                fig_m.add_trace(
+                    go.Scatter(
+                        x=m_df.index,
+                        y=m_df['SMA_20'],
+                        mode='lines',
+                        name='20-Day SMA',
+                        line=dict(color='#FFD700', width=1.5, dash='dot')
+                    )
+                )
+                
+                prefix = macro_info.get("prefix", "")
+                suffix = macro_info.get("suffix", "")
+                unit_label = f" ({prefix}...{suffix})" if prefix or suffix else ""
+                
+                fig_m.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#0E1117",
+                    plot_bgcolor="#161B22",
+                    height=380,
+                    margin=dict(l=10, r=10, t=25, b=10),
+                    yaxis=dict(title=f"{selected_macro}{unit_label}", gridcolor="#21262D"),
+                    xaxis=dict(gridcolor="#21262D"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    hovermode="x unified"
+                )
+                st.plotly_chart(fig_m, width='stretch')
+                
+                # Quick Stats
+                ms1, ms2, ms3 = st.columns(3)
+                ms1.metric(label="Period High", value=f"{prefix}{p_high:,.2f}{suffix}")
+                ms2.metric(label="Period Low", value=f"{prefix}{p_low:,.2f}{suffix}")
+                ms3.metric(label="Latest Level", value=f"{prefix}{latest_m_val:,.2f}{suffix}")
             else:
-                st.info("Macro historical data unavailable.")
-        except Exception as e:
-            st.warning(f"Unable to load macro chart: {e}")
+                st.warning("Could not fetch historical data for this macro indicator.")
+
+        else: # Multi-Asset Relative Performance
+            selected_multi = st.multiselect(
+                "Select Macro Indicators to Compare:",
+                options=list(MACRO_INDICATORS.keys()),
+                default=["Brent Crude", "India VIX", "US 10Y Yield", "Dollar Index (DXY)"]
+            )
+            
+            if selected_multi:
+                fig_multi = go.Figure()
+                palette = ['#00E676', '#FF5252', '#FFD700', '#29B6F6', '#AB47BC', '#FF9800']
+                
+                for idx, m_name in enumerate(selected_multi):
+                    t_sym = MACRO_INDICATORS[m_name]["ticker"]
+                    m_df = fetch_macro_history(t_sym, days=days_to_fetch)
+                    if not m_df.empty:
+                        first_valid = m_df['Close'].dropna().iloc[0]
+                        norm_returns = ((m_df['Close'] / first_valid) - 1) * 100
+                        fig_multi.add_trace(
+                            go.Scatter(
+                                x=m_df.index,
+                                y=norm_returns,
+                                mode='lines',
+                                name=m_name,
+                                line=dict(color=palette[idx % len(palette)], width=2)
+                            )
+                        )
+                
+                fig_multi.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#0E1117",
+                    plot_bgcolor="#161B22",
+                    height=420,
+                    margin=dict(l=10, r=10, t=25, b=10),
+                    yaxis=dict(title="Normalized % Change", gridcolor="#21262D", ticksuffix="%"),
+                    xaxis=dict(gridcolor="#21262D"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    hovermode="x unified"
+                )
+                st.plotly_chart(fig_multi, width='stretch')
+            else:
+                st.info("Select at least one macro indicator above to plot.")
 
     st.markdown("---")
 
+# Display FII / DII Institutional Flow Banner
+fii_dii = get_cached_fii_dii()
+if fii_dii:
+    st.markdown("### 🏦 Institutional Market Flows (FII / DII)")
+    fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 1.5])
+    
+    f_net = fii_dii.get("fii_net", 0.0)
+    d_net = fii_dii.get("dii_net", 0.0)
+    t_net = fii_dii.get("total_net", 0.0)
+    
+    fc1.metric(
+        label="FII / FPI Net Flow",
+        value=f"{'+' if f_net >= 0 else ''}₹{f_net:,.2f} Cr",
+        delta=f"Buy: ₹{fii_dii.get('fii_buy', 0):,.0f} | Sell: ₹{fii_dii.get('fii_sell', 0):,.0f}",
+        delta_color="normal" if f_net >= 0 else "inverse"
+    )
+    fc2.metric(
+        label="DII Net Flow",
+        value=f"{'+' if d_net >= 0 else ''}₹{d_net:,.2f} Cr",
+        delta=f"Buy: ₹{fii_dii.get('dii_buy', 0):,.0f} | Sell: ₹{fii_dii.get('dii_sell', 0):,.0f}",
+        delta_color="normal" if d_net >= 0 else "inverse"
+    )
+    fc3.metric(
+        label="Combined Net Flow",
+        value=f"{'+' if t_net >= 0 else ''}₹{t_net:,.2f} Cr",
+        delta=f"Net Institutional Flow",
+        delta_color="normal" if t_net >= 0 else "inverse"
+    )
+    
+    fc4.markdown(f"**Institutional Regime:**<br>{fii_dii.get('sentiment', 'Neutral')}", unsafe_allow_html=True)
+    fc4.caption(f"{fii_dii.get('sentiment_desc', '')} <br> *Provisional Data as of: {fii_dii.get('date', 'Recent')}*", unsafe_allow_html=True)
+    st.markdown("---")
 
 tab1, tab2 = st.tabs(["Dashboard", "AI Assistant"])
 
 with tab1:
     # User Input
+
     c_left, col2, c_right = st.columns([1, 2, 1])
     with col2:
         selected_name = st.selectbox(
