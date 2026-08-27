@@ -586,8 +586,40 @@ with tab1:
             
         st.markdown("---")
 
+        # 4. Upcoming Corporate Actions & Event Horizon
+        corp_act = result.get('corporate_actions', {})
+        if corp_act:
+            st.markdown("#### 📅 Upcoming Corporate Actions & Event Horizon")
+            ca1, ca2, ca3, ca4 = st.columns(4)
+            ca1.metric(
+                label="Next Earnings Date",
+                value=corp_act.get('earnings_date', 'TBD'),
+                delta=f"Est. EPS: {corp_act.get('earnings_est_eps', 'N/A')}",
+                delta_color="off"
+            )
+            ca2.metric(
+                label="Dividend Yield",
+                value=corp_act.get('dividend_yield', 'N/A'),
+                delta=f"Rate: {corp_act.get('dividend_rate', 'N/A')}",
+                delta_color="normal"
+            )
+            ca3.metric(
+                label="Ex-Dividend Date",
+                value=corp_act.get('ex_dividend_date', 'N/A'),
+                delta="Recent / Upcoming",
+                delta_color="off"
+            )
+            ca4.metric(
+                label="Stock Splits & Bonuses",
+                value=corp_act.get('last_split', 'None'),
+                delta="Capital Actions",
+                delta_color="off"
+            )
+            st.markdown("---")
+
         # Interactive Candlestick & Volume Chart
         st.markdown("### 📊 Interactive Technical Price Chart")
+
 
         
         # Timeframe selection

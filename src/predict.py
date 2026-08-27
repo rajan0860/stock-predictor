@@ -173,6 +173,12 @@ def predict(ticker, force_refresh=True):
         "macro_sens": "General market beta."
     })
 
+    try:
+        from src.corporate_actions import get_corporate_actions
+        corp_actions = get_corporate_actions(ticker)
+    except Exception:
+        corp_actions = None
+
     return {
         'date': date_str,
         'ticker': ticker,
@@ -199,8 +205,10 @@ def predict(ticker, force_refresh=True):
             'net_margin': net_margin,
             'debt_to_equity': debt_to_equity
         },
-        'sector_context': sector_info
+        'sector_context': sector_info,
+        'corporate_actions': corp_actions
     }
+
 
 
 
