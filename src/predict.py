@@ -100,8 +100,78 @@ def predict(ticker, force_refresh=True):
     except Exception:
         quality_metrics = None
 
-    if quality_metrics:
-        print(f"📊 Historical Reliability: In comparable prior signals ({quality_metrics['comparable_samples']} setups), the model was directionally correct {quality_metrics['directional_accuracy_pct']:.1f}% of the time, with median absolute 5-day error of {quality_metrics['median_abs_error_pct']:.2f}%.")
+    # Extract technical levels & indicators
+    last_row = ticker_df.iloc[-1]
+    ma_20 = float(last_row.get('ma_20', latest_price))
+    ma_50 = float(last_row.get('ma_50', latest_price))
+    rsi_14 = float(last_row.get('rsi_14', 50.0))
+    vol_vs_ma20 = float(last_row.get('vol_vs_ma20', 1.0))
+    
+    lookback_window = min(20, len(ticker_df))
+    support_20d = float(ticker_df['Low'].iloc[-lookback_window:].min() if 'Low' in ticker_df.columns else latest_price * 0.96)
+    resistance_20d = float(ticker_df['High'].iloc[-lookback_window:].max() if 'High' in ticker_df.columns else latest_price * 1.04)
+    
+    revenue_yoy = float(last_row.get('revenue_yoy', float('nan')))
+    net_margin = float(last_row.get('net_margin', float('nan')))
+    debt_to_equity = float(last_row.get('debt_to_equity', float('nan')))
+    
+    sector_profiles = {
+        "RELIANCE.NS": {
+            "sector": "Energy, Oil & Telecom Conglomerate",
+            "drivers": "Crude refining margins, petrochemical spreads, Jio ARPU growth, retail expansion.",
+            "crude_impact": "Dual impact: Downstream refining benefits from crack spreads; upstream benefits from higher realized crude prices.",
+            "macro_sens": "High Nifty beta (1.1x). Highly sensitive to FII equity flows."
+        },
+        "TCS.NS": {
+            "sector": "Information Technology / Software Services",
+            "drivers": "BFSI & North American enterprise IT deal total contract value (TCV), hiring trends.",
+            "crude_impact": "Low direct impact; lower global inflation supports corporate IT spending budgets.",
+            "macro_sens": "Direct beneficiary of USD/INR depreciation (forex tailwind). Sensitive to US 10Y yields."
+        },
+        "INFY.NS": {
+            "sector": "Information Technology / Digital Services",
+            "drivers": "Cloud transformation deals, generative AI consulting pipeline, wage margins.",
+            "crude_impact": "Negligible direct sensitivity; benefits when lower energy prices stabilize global enterprise opex.",
+            "macro_sens": "High USD sensitivity (~85% revenue in USD/EUR). FII portfolio favorite."
+        },
+        "HDFCBANK.NS": {
+            "sector": "Financials / Private Sector Banking",
+            "drivers": "Deposit growth, Net Interest Margin (NIM) trajectory, credit quality / GNPA.",
+            "crude_impact": "Lower crude lowers domestic inflation, enabling RBI repo rate easing cycles.",
+            "macro_sens": "Heaviest weight in Nifty 50. Primary vehicle for foreign institutional capital flows."
+        },
+        "HINDPETRO.NS": {
+            "sector": "Oil Refining & Marketing (OMC)",
+            "drivers": "Retail fuel marketing margins (petrol/diesel), Gross Refining Margins (GRMs).",
+            "crude_impact": "Sharp crude drops significantly expand retail fuel marketing margins, a major net tailwind.",
+            "macro_sens": "High volatility around Brent crude and government excise / retail price regulations."
+        },
+        "BPCL.NS": {
+            "sector": "Oil Refining & Marketing (OMC)",
+            "drivers": "Marketing margins, Kochi & Bina refinery throughput, dividend yield.",
+            "crude_impact": "Brent decline lowers crude procurement costs and improves marketing profitability on auto fuels.",
+            "macro_sens": "Strong inverse correlation with spikes in Brent crude; benefits from stable INR."
+        },
+        "KFINTECH.NS": {
+            "sector": "Financial Services / Capital Market Infrastructure",
+            "drivers": "Domestic Mutual Fund industry AUM, monthly SIP inflows, alternative asset registrar services.",
+            "crude_impact": "Macro stability supports domestic retail equity participation and SIP inflow momentum.",
+            "macro_sens": "Tied to Indian equity market capitalization and retail mutual fund volume expansion."
+        },
+        "JYOTICNC.NS": {
+            "sector": "Capital Goods / Industrial CNC Machinery",
+            "drivers": "Aerospace, defense, automotive capex cycle, multi-year order book execution.",
+            "crude_impact": "Lower energy costs reduce manufacturing input costs and logistics overhead.",
+            "macro_sens": "Driven by domestic manufacturing PMI and private sector capital expenditure."
+        }
+    }
+    
+    sector_info = sector_profiles.get(ticker, {
+        "sector": "Diversified Equities",
+        "drivers": "Corporate earnings and domestic demand growth.",
+        "crude_impact": "Energy cost sensitivity.",
+        "macro_sens": "General market beta."
+    })
 
     return {
         'date': date_str,
@@ -111,8 +181,27 @@ def predict(ticker, force_refresh=True):
         'pred_alpha': pred_alpha,
         'implied_price': implied_price,
         'prob_up': prob_up,
-        'quality_metrics': quality_metrics
+        'quality_metrics': quality_metrics,
+        'technical_levels': {
+            'ma_20': ma_20,
+            'ma_50': ma_50,
+            'rsi_14': rsi_14,
+            'vol_vs_ma20': vol_vs_ma20,
+            'support_20d': support_20d,
+            'resistance_20d': resistance_20d,
+            'dist_ma20_pct': ((latest_price / ma_20) - 1.0) * 100.0 if ma_20 > 0 else 0.0,
+            'dist_ma50_pct': ((latest_price / ma_50) - 1.0) * 100.0 if ma_50 > 0 else 0.0,
+            'dist_support_pct': ((latest_price / support_20d) - 1.0) * 100.0 if support_20d > 0 else 0.0,
+            'dist_resistance_pct': ((resistance_20d / latest_price) - 1.0) * 100.0 if latest_price > 0 else 0.0,
+        },
+        'fundamentals': {
+            'revenue_yoy': revenue_yoy,
+            'net_margin': net_margin,
+            'debt_to_equity': debt_to_equity
+        },
+        'sector_context': sector_info
     }
+
 
 
 if __name__ == "__main__":

@@ -485,12 +485,109 @@ with tab1:
                 4. **Asset-Calibrated Error:** Benchmarks the forecast magnitude against the stock's actual median 5-day price deviation.
                 """)
 
-            st.markdown("---")
-
+        # 1. Actionable Decision Card & Trade-Quality Filter
+        tech = result.get('technical_levels', {})
+        sup_val = tech.get('support_20d', latest_price * 0.96)
+        res_val = tech.get('resistance_20d', latest_price * 1.04)
+        ma20_val = tech.get('ma_20', latest_price)
+        ma50_val = tech.get('ma_50', latest_price)
+        rsi_val = tech.get('rsi_14', 50.0)
+        vol_ratio = tech.get('vol_vs_ma20', 1.0)
         
-        # Macro Factor Context directly on main prediction screen
-        st.markdown("#### 🌐 Macro Factor Alignment")
+        risk_per_share = max(0.01, latest_price - sup_val)
+        reward_per_share = max(0.01, implied_price - latest_price) if is_bullish else max(0.01, latest_price - implied_price)
+        rr_ratio = reward_per_share / risk_per_share if risk_per_share > 0 else 1.0
 
+        st.markdown("#### 📋 Tactical Playbook & Trade Decision Architecture")
+        
+        trade_status_color = "#FFC107" if snr < 0.40 else ("#4CAF50" if is_bullish else "#F44336")
+        trade_status_title = "⏸️ NO TRADE / WATCHLIST ONLY (Low SNR)" if snr < 0.40 else ("🟢 ACTIVE TRADE SETUP (BULLISH)" if is_bullish else "🔴 ACTIVE TRADE SETUP (BEARISH)")
+        
+        st.markdown(
+            f"""
+            <div style="background: rgba(30, 34, 45, 0.9); border: 1px solid {trade_status_color}; border-left: 5px solid {trade_status_color}; padding: 14px 18px; border-radius: 8px; margin-bottom: 18px;">
+                <div style="font-size: 1.1rem; font-weight: 700; color: {trade_status_color}; margin-bottom: 8px;">{trade_status_title}</div>
+                <div style="color: #E2E8F0; font-size: 0.92rem; line-height: 1.6;">
+                    • <b>Action for 5-Day Swing:</b> {"Avoid chasing for a 5-day swing: expected gain (" + f"{pred_return*100:+.2f}%" + ") is smaller than normal forecast error (±" + f"{med_err_pct:.2f}%" + "). Transaction costs, slippage, and ordinary daily noise could overwhelm the statistical edge." if snr < 0.40 else "Statistically meaningful edge present relative to baseline error. Consider risk-managed positioning."}<br>
+                    • <b>Confirmation Rule:</b> Consider action only if price breaks and holds above resistance at <b>₹{res_val:,.2f}</b> on clearly above-average volume (>1.5x 20D average), rather than buying solely on a mild model forecast.<br>
+                    • <b>If Already Holding:</b> Treat this as a <b>Hold/Watch</b> signal rather than an aggressive add. Define risk below technical support at <b>₹{sup_val:,.2f}</b> (-{tech.get('dist_support_pct', 0):.1f}%).<br>
+                    • <b>Risk-to-Reward Architecture:</b> Entry: <b>₹{latest_price:,.2f}</b> | Stop-Loss / Invalidation: <b>₹{sup_val:,.2f}</b> (-₹{risk_per_share:,.2f}) | Target: <b>₹{implied_price:,.2f}</b> | <b>R:R = 1 : {rr_ratio:.2f}</b>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # 2. Live Technical Levels Panel
+        st.markdown("#### 📐 Live Technical Levels & Regime Analysis")
+        tl1, tl2, tl3, tl4 = st.columns(4)
+        tl1.metric(
+            label="20-Day SMA",
+            value=f"₹{ma20_val:,.2f}",
+            delta=f"{tech.get('dist_ma20_pct', 0):+.2f}% from price",
+            delta_color="normal"
+        )
+        tl2.metric(
+            label="50-Day SMA",
+            value=f"₹{ma50_val:,.2f}",
+            delta=f"{tech.get('dist_ma50_pct', 0):+.2f}% from price",
+            delta_color="normal"
+        )
+        tl3.metric(
+            label="20D Key Support (Low)",
+            value=f"₹{sup_val:,.2f}",
+            delta=f"-{tech.get('dist_support_pct', 0):.2f}% below",
+            delta_color="inverse"
+        )
+        tl4.metric(
+            label="20D Key Resistance (High)",
+            value=f"₹{res_val:,.2f}",
+            delta=f"+{tech.get('dist_resistance_pct', 0):.2f}% above",
+            delta_color="normal"
+        )
+        
+        rsi_state = "Overbought (>70)" if rsi_val >= 70 else ("Oversold (<30)" if rsi_val <= 30 else "Neutral Momentum (30-70)")
+        vol_state = "Heavy / Surge (>1.5x)" if vol_ratio >= 1.5 else ("Below Average (<0.8x)" if vol_ratio < 0.8 else "Normal Volume (0.8x - 1.5x)")
+        st.caption(f"📊 **Momentum & Volume Regimes:** RSI (14) = **{rsi_val:.1f}** ({rsi_state}) | Volume vs 20D Avg = **{vol_ratio:.2f}x** ({vol_state})")
+        st.markdown("---")
+
+        # 3. Sector Intelligence & Macro Sensitivity Overlay
+        sector_info = result.get('sector_context', {})
+        funds = result.get('fundamentals', {})
+        st.markdown(f"#### 🏢 Sector Context: {sector_info.get('sector', 'Equities')}")
+        
+        sec_col1, sec_col2 = st.columns([1.5, 1])
+        with sec_col1:
+            st.markdown(
+                f"""
+                <div style="background: rgba(22, 27, 34, 0.8); border: 1px solid #30363D; padding: 12px 16px; border-radius: 6px; font-size: 0.88rem; line-height: 1.5;">
+                    🛢️ <b>Crude & Macro Drivers:</b> {sector_info.get('crude_impact', 'N/A')}<br>
+                    📈 <b>Primary Growth Catalysts:</b> {sector_info.get('drivers', 'N/A')}<br>
+                    🌐 <b>Macro & Flow Sensitivity:</b> {sector_info.get('macro_sens', 'N/A')}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with sec_col2:
+            rev_str = f"{funds.get('revenue_yoy', 0)*100:+.1f}%" if pd.notna(funds.get('revenue_yoy')) else "N/A"
+            margin_str = f"{funds.get('net_margin', 0)*100:.1f}%" if pd.notna(funds.get('net_margin')) else "N/A"
+            debt_str = f"{funds.get('debt_to_equity', 0):.2f}" if pd.notna(funds.get('debt_to_equity')) else "N/A"
+            st.markdown(
+                f"""
+                <div style="background: rgba(22, 27, 34, 0.8); border: 1px solid #30363D; padding: 12px 16px; border-radius: 6px; font-size: 0.88rem; line-height: 1.5;">
+                    💼 <b>Fundamental Metrics:</b><br>
+                    • Revenue YoY: <b>{rev_str}</b><br>
+                    • Net Profit Margin: <b>{margin_str}</b><br>
+                    • Debt-to-Equity: <b>{debt_str}</b>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+        st.markdown("---")
+
+        # 4. Macro Factor Alignment
+        st.markdown("#### 🌐 Macro Factor Alignment")
         if macro_data:
             m_cols = st.columns(len(macro_data))
             for m_col, (m_name, m_val) in zip(m_cols, macro_data.items()):
@@ -503,6 +600,7 @@ with tab1:
                 m_col.caption(f"<span style='color:#718096; font-size:0.7rem;'>{m_val['desc']}</span>", unsafe_allow_html=True)
         
         st.markdown("---")
+
 
         
         # Interactive Candlestick & Volume Chart
@@ -645,8 +743,29 @@ with tab1:
         except Exception as e:
             st.warning(f"Could not load chart: {e}")
             
+        # 5. Out-of-Sample Historical Prediction Audit Log
+        if os.path.exists("models/oof_predictions.parquet"):
+            with st.expander(f"📜 View Out-of-Sample Historical Predictions for {ticker} (Last 10 Setups)", expanded=False):
+                try:
+                    oof_full = pd.read_parquet("models/oof_predictions.parquet")
+                    oof_t = oof_full[oof_full['ticker'] == ticker].sort_values('date', ascending=False).head(10).copy()
+                    if not oof_t.empty:
+                        table_df = pd.DataFrame({
+                            'Date': pd.to_datetime(oof_t['date']).dt.strftime('%Y-%m-%d'),
+                            'Predicted 5D Return': oof_t['y_pred'].apply(lambda x: f"{x*100:+.2f}%"),
+                            'Actual 5D Return': oof_t['y_true'].apply(lambda x: f"{x*100:+.2f}%"),
+                            'Absolute Error': oof_t['abs_error'].apply(lambda x: f"{x*100:.2f}%"),
+                            'Model Directional Prob': oof_t['prob_up'].apply(lambda x: f"{x*100:.1f}%"),
+                            'Outcome': oof_t['correct_dir'].apply(lambda x: "🟢 WIN" if x == 1 else "🔴 LOSS")
+                        })
+                        st.dataframe(table_df, width='stretch', hide_index=True)
+                        st.caption("🔍 *Walk-forward out-of-fold historical records. Predictions were generated strictly on expanding training windows prior to each date without lookahead leakage.*")
+                except Exception as e:
+                    st.warning(f"Could not load prediction history: {e}")
+
         # Disclaimer
         st.caption("⚠️ **Disclaimer:** This is a machine learning model estimate, not financial advice. Do not trade based solely on these predictions.")
+
 
 with tab2:
 
