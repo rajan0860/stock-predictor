@@ -586,25 +586,9 @@ with tab1:
             
         st.markdown("---")
 
-        # 4. Macro Factor Alignment
-        st.markdown("#### 🌐 Macro Factor Alignment")
-        if macro_data:
-            m_cols = st.columns(len(macro_data))
-            for m_col, (m_name, m_val) in zip(m_cols, macro_data.items()):
-                p_str = f"{m_val['prefix']}{m_val['price']:,.2f}{m_val['suffix']}"
-                m_col.metric(
-                    label=m_name,
-                    value=p_str,
-                    delta=m_val["delta"]
-                )
-                m_col.caption(f"<span style='color:#718096; font-size:0.7rem;'>{m_val['desc']}</span>", unsafe_allow_html=True)
-        
-        st.markdown("---")
-
-
-        
         # Interactive Candlestick & Volume Chart
         st.markdown("### 📊 Interactive Technical Price Chart")
+
         
         # Timeframe selection
         tf_col1, tf_col2 = st.columns([1, 1])
