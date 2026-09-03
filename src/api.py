@@ -59,6 +59,10 @@ def get_stock_prediction(company_name: str) -> str:
 
 app = FastAPI(title="Stock Predictor API")
 
+# Include portfolio endpoints
+from src.portfolio_api import router as portfolio_router
+app.include_router(portfolio_router)
+
 
 # Initialize LLM Agent
 try:
